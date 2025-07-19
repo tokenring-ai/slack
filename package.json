@@ -1,0 +1,25 @@
+{
+  "name": "@token-ring/slack",
+  "description": "Slack bot context for chat engine integration",
+  "version": "1.0.0",
+  "author": "",
+  "dependencies": {
+    "@slack/bolt": "^4.4.0",
+    "@slack/web-api": "^7.9.2",
+    "@token-ring/ai-client": "0.1.0",
+    "@token-ring/chat": "0.1.0",
+    "@token-ring/eslint-config": "0.0.0",
+    "@token-ring/registry": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3"
+  },
+  "exports": {
+    "./*": "./*.js"
+  },
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "eslint": "eslint --fix ./"
+  }
+}
