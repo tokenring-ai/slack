@@ -7,7 +7,7 @@ export const packageInfo: TokenRingPackage = {
   version: packageJSON.version,
   description: packageJSON.description,
   install(agentTeam: AgentTeam) {
-    const slackConfig = agentTeam.getConfigSlice("slack", SlackServiceConfigSchema);
+    const slackConfig = agentTeam.getConfigSlice("slack", SlackServiceConfigSchema.optional());
 
     if (slackConfig) {
       agentTeam.services.register(new SlackBotService(slackConfig));
