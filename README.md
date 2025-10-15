@@ -1,87 +1,68 @@
-# Slack Bot Service (`SlackBotService.js`)
+# Slack Service
 
-This document explains how to configure and use the `SlackBotService`, which integrates with Slack to enable bot interactions within your workspace.
+Integrates Slack with TokenRing agents, enabling bot interactions within your workspace. Each Slack user gets their own persistent agent instance that maintains conversation history.
 
 ## Prerequisites
 
-- A Slack workspace where you have permission to create and manage apps.
-- **Slack Bot Token (`botToken`)**: An OAuth token that starts with `xoxb-`. This token allows the bot to connect to Slack and perform actions.
-- **Slack Signing Secret (`signingSecret`)**: Used by Slack to verify that incoming requests are genuinely from Slack. This is required if not using Socket Mode.
-- **Slack App-Level Token (`appToken`) (Optional)**: An app-level token that starts with `xapp-`. Required if you want to use Socket Mode instead of HTTP for event delivery. Socket Mode is generally recommended for development or if you cannot expose a public HTTP endpoint.
-- **Default Channel ID (`channelId`) (Optional)**: The ID of a Slack channel (e.g., `C1234567890`) where the bot can post initial announcements (like "bot is online"). Event-specific interactions occur in the channel of the event itself.
-- **Authorized User IDs (`authorizedUserIds`) (Optional)**: A comma-separated list of Slack User IDs (e.g., `U06T1LWJG,UABCDEF123`) that are authorized to interact with certain bot features. If not provided, authorization behavior may vary (currently, it restricts some interactions if not set, this will be made more explicit or default to open if not provided in future updates to the service).
+- Slack workspace with app creation permissions
+- **Bot Token (`botToken`)**: OAuth token starting with `xoxb-`
+- **Signing Secret (`signingSecret`)**: Verifies incoming Slack requests
+- **App-Level Token (`appToken`)** (Optional): Token starting with `xapp-` for Socket Mode
+- **Channel ID (`channelId`)** (Optional): Channel for startup announcements (e.g., `C1234567890`)
+- **Authorized User IDs (`authorizedUserIds`)** (Optional): Array of user IDs allowed to use the bot
+- **Default Agent Type (`defaultAgentType`)** (Optional): Agent type to create for users (defaults to first available)
 
-## Configuration Steps
+## Setup
 
-1.  **Create a Slack App and Bot User**
-    *   Go to [https://api.slack.com/apps](https://api.slack.com/apps) and click "Create New App".
-    *   Choose "From scratch", name your app, and select your workspace.
-    *   Navigate to "Bot Users" under "Features" in the sidebar and add a bot user.
-    *   Go to "OAuth & Permissions" under "Settings" in the sidebar. Add the following **Bot Token Scopes**:
-        *   `channels:history` (to read channel messages, e.g., for context)
-        *   `chat:write` (to send messages)
-        *   `channels:read` (to get channel info)
-        *   `users:read` (if you need to map user IDs to names, optional for basic operation)
-        *   `commands` (if you are using Slash Commands)
-        *   `app_mentions:read` (to receive @mentions)
-        *   `im:history`, `im:read`, `im:write` (for Direct Message functionality)
-    *   Install the app to your workspace. After installation, you will receive a **Bot User OAuth Token** (this is your `botToken`).
+1. **Create Slack App** at [https://api.slack.com/apps](https://api.slack.com/apps)
+2. **Add Bot Token Scopes**:
+   - `chat:write` - Send messages
+   - `app_mentions:read` - Receive @mentions
+   - `im:history`, `im:read`, `im:write` - Direct messages
+   - `commands` - Slash commands (optional)
+3. **Install to workspace** and copy the Bot User OAuth Token
+4. **Get Signing Secret** from "Basic Information" > "App Credentials"
+5. **Enable Socket Mode** (optional) and generate app-level token
+6. **Invite bot** to channels: `/invite @YourBotName`
 
-2.  **Retrieve App Credentials**
-    *   **Signing Secret**: Navigate to "Basic Information" under "Settings". Your **Signing Secret** is available in the "App Credentials" section.
-    *   **App-Level Token (for Socket Mode)**: If using Socket Mode, go to "Socket Mode" under "Settings" and enable it. You may need to generate an app-level token here. This token will be your `appToken`.
-    *   **Channel ID**: To get a specific channel's ID, open Slack, right-click the channel name, select "View channel details", and you'll find the ID (usually starting with `C`) at the bottom of the pop-up.
+## Configuration
 
-3.  **Set Environment Variables or Configuration**
-    Provide the following configuration to the `SlackBotService`, typically via environment variables:
-    *   `SLACK_BOT_TOKEN`: Your Slack Bot User OAuth Token (e.g., `xoxb-...`).
-    *   `SLACK_SIGNING_SECRET`: Your Slack App's Signing Secret.
-    *   `SLACK_APP_TOKEN` (Optional): Your Slack App-level token (e.g., `xapp-...`) if using Socket Mode.
-    *   `SLACK_CHANNEL_ID` (Optional): The default Slack channel ID for announcements.
-    *   `SLACK_AUTHORIZED_USER_IDS` (Optional): A comma-separated string of user IDs authorized to use the bot (e.g., "U012ABC3DE,U456XYZ7FG").
+```typescript
+import SlackService from '@tokenring-ai/slack/SlackBotService';
+import { AgentTeam } from '@tokenring-ai/agent';
+
+const slackService = new SlackService({
+  botToken: process.env.SLACK_BOT_TOKEN!,
+  signingSecret: process.env.SLACK_SIGNING_SECRET!,
+  appToken: process.env.SLACK_APP_TOKEN, // Optional, enables Socket Mode
+  channelId: process.env.SLACK_CHANNEL_ID, // Optional
+  authorizedUserIds: ['U06T1LWJG', 'UABCDEF123'], // Optional
+  defaultAgentType: 'teamLeader' // Optional
+});
+
+const agentTeam = new AgentTeam(config);
+await agentTeam.addServices(slackService);
+await slackService.start(agentTeam);
+```
+
+## Features
+
+- **Per-User Agents**: Each Slack user gets a dedicated agent with persistent chat history
+- **Slash Commands**: Forward to agent's command system (e.g., `/help`, `/reset`)
+- **@Mentions**: Respond to mentions in channels
+- **Direct Messages**: Private conversations with the bot
+- **Socket Mode**: No public endpoint required for development
+- **Authorization**: Optional user whitelist
 
 ## Usage
 
-- Initialize the `SlackBotService` with the necessary tokens and IDs.
-- The bot uses Slack's **Events API** (either via HTTP POST requests to an endpoint you expose, or via Socket Mode) to receive messages and events in real-time. It does **not** use polling for new messages.
-- It processes commands and chat input, then sends messages back to the relevant channel or DM.
-
-## Example
-
-```javascript
-const { SlackBotService } = require('./SlackBotService'); // Adjust path as necessary
-
-// Configuration sourced from environment variables
-const botToken = process.env.SLACK_BOT_TOKEN;
-const signingSecret = process.env.SLACK_SIGNING_SECRET;
-const appToken = process.env.SLACK_APP_TOKEN; // Optional, for Socket Mode
-const channelId = process.env.SLACK_CHANNEL_ID; // Optional
-const authorizedUserIdsString = process.env.SLACK_AUTHORIZED_USER_IDS; // Optional
-
-const authorizedUserIds = authorizedUserIdsString ? authorizedUserIdsString.split(',') : [];
-
-// Ensure required tokens are present
-if (!botToken || !signingSecret) {
-  throw new Error("SLACK_BOT_TOKEN and SLACK_SIGNING_SECRET must be provided.");
-}
-
-const slackBotService = new SlackBotService({
-  botToken,
-  signingSecret,
-  appToken, // Will enable Socket Mode if present
-  channelId,
-  authorizedUserIds // Pass the array of authorized user IDs
-});
-
-// Start the bot (assuming it's part of a larger application framework that calls start())
-// await slackBotService.start(registry); // 'registry' would be your application's service registry
-```
+- **Mention**: `@BotName what is the weather?`
+- **DM**: Send direct message to bot
+- **Commands**: `/help` or `@BotName /reset`
 
 ## Notes
 
-- **Socket Mode vs. HTTP**: If `appToken` is provided, Socket Mode will be enabled. Otherwise, the bot will expect to receive events via HTTP, requiring your application to expose an endpoint for Slack to call.
-- **Bot Invitation**: Make sure the bot has been invited to any channels where it is expected to operate or read messages (e.g., `/invite @YourBotName`).
-- **User Authorization**: The `authorizedUserIds` configuration allows you to restrict access to the bot's functionalities. If this list is empty or not provided, access might be open or restricted by default depending on future service updates (currently, it's restrictive for mentions/DMs without this).
-- **Extensibility**: For advanced usage, you can extend `SlackBotService.js` or the services it interacts with (like `ChatService`, `ChatCommandRegistry`) to handle more Slack events, interactive components, or custom command logic.
-
-If you encounter any issues or have questions, please refer to the [Slack API documentation](https://api.slack.com/) or reach out for support within your project.
+- Socket Mode enabled when `appToken` provided, otherwise uses HTTP events
+- Each user's agent maintains independent conversation state
+- Agents are cleaned up when service stops
+- If `authorizedUserIds` is empty, all users can interact (set list to restrict access)
