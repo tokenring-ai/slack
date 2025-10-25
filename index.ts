@@ -10,7 +10,7 @@ export default {
     const slackConfig = agentTeam.getConfigSlice("slack", SlackServiceConfigSchema.optional());
 
     if (slackConfig) {
-      agentTeam.services.register(new SlackBotService(slackConfig));
+      agentTeam.addServices(new SlackBotService(slackConfig));
     }
   },
 } as TokenRingPackage;

@@ -1,7 +1,7 @@
-import { App } from '@slack/bolt';
-import { Agent, AgentTeam } from "@tokenring-ai/agent";
-import { TokenRingService } from "@tokenring-ai/agent/types";
-import { z } from "zod";
+import {App} from '@slack/bolt';
+import {Agent, AgentConfigService, AgentTeam} from "@tokenring-ai/agent";
+import {TokenRingService} from "@tokenring-ai/agent/types";
+import {z} from "zod";
 
 export const SlackServiceConfigSchema = z.object({
   botToken: z.string().min(1, "Bot token is required"),
@@ -25,7 +25,7 @@ export default class SlackService implements TokenRingService {
   private authorizedUserIds: string[] = [];
   private defaultAgentType: string;
   private app: App | null = null;
-  private agentTeam: AgentTeam | null = null;
+  private agentTeam!: AgentTeam
   private userAgents = new Map<string, Agent>();
 
   constructor({ botToken, signingSecret, appToken, channelId, authorizedUserIds, defaultAgentType }: SlackServiceConfig) {
@@ -44,8 +44,9 @@ export default class SlackService implements TokenRingService {
   }
 
   private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
+    const agentConfigService = this.agentTeam.requireService(AgentConfigService);
     if (!this.userAgents.has(userId)) {
-      const agent = await this.agentTeam!.createAgent(this.defaultAgentType);
+      const agent = await agentConfigService.spawnAgent(this.defaultAgentType, this.agentTeam);
       this.userAgents.set(userId, agent);
     }
     return this.userAgents.get(userId)!;
