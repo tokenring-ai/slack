@@ -1,6 +1,7 @@
 # Slack Service
 
-Integrates Slack with TokenRing agents, enabling bot interactions within your workspace. Each Slack user gets their own persistent agent instance that maintains conversation history.
+Integrates Slack with TokenRing agents, enabling bot interactions within your workspace. Each Slack user gets their own
+persistent agent instance that maintains conversation history.
 
 ## Prerequisites
 
@@ -16,10 +17,10 @@ Integrates Slack with TokenRing agents, enabling bot interactions within your wo
 
 1. **Create Slack App** at [https://api.slack.com/apps](https://api.slack.com/apps)
 2. **Add Bot Token Scopes**:
-   - `chat:write` - Send messages
-   - `app_mentions:read` - Receive @mentions
-   - `im:history`, `im:read`, `im:write` - Direct messages
-   - `commands` - Slash commands (optional)
+ - `chat:write` - Send messages
+ - `app_mentions:read` - Receive @mentions
+ - `im:history`, `im:read`, `im:write` - Direct messages
+ - `commands` - Slash commands (optional)
 3. **Install to workspace** and copy the Bot User OAuth Token
 4. **Get Signing Secret** from "Basic Information" > "App Credentials"
 5. **Enable Socket Mode** (optional) and generate app-level token

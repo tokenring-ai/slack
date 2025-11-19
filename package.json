@@ -1,18 +1,18 @@
 {
-  "name": "@tokenring-ai/slack",
-  "description": "A Token Ring plugin providing Slack integration.",
-  "version": "1.0.0",
-  "dependencies": {
-    "@slack/bolt": "^4.5.0",
-    "@slack/web-api": "^7.11.0",
-    "@tokenring-ai/ai-client": "0.1.0",
-    "@tokenring-ai/agent": "0.1.0"
-  },
-  "exports": {
-   ".": "./index.ts",
-   "./*": "./*.ts"
-  },
-  "types": "./index.ts",
-  "license": "MIT",
-  "type": "module"
+ "name": "@tokenring-ai/slack",
+ "description": "A Token Ring plugin providing Slack integration.",
+ "version": "1.0.0",
+ "dependencies": {
+  "@slack/bolt": "^4.6.0",
+  "@slack/web-api": "^7.12.0",
+  "@tokenring-ai/chat": "0.1.0",
+  "@tokenring-ai/agent": "0.1.0"
+ },
+ "exports": {
+  ".": "./index.ts",
+  "./*": "./*.ts"
+ },
+ "types": "./index.ts",
+ "license": "MIT",
+ "type": "module"
 }

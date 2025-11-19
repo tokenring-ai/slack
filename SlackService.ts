@@ -28,7 +28,7 @@ export default class SlackService implements TokenRingService {
   private agentTeam!: AgentTeam
   private userAgents = new Map<string, Agent>();
 
-  constructor({ botToken, signingSecret, appToken, channelId, authorizedUserIds, defaultAgentType }: SlackServiceConfig) {
+  constructor({botToken, signingSecret, appToken, channelId, authorizedUserIds, defaultAgentType}: SlackServiceConfig) {
     if (!botToken) {
       throw new Error("SlackService requires a botToken.");
     }
@@ -43,15 +43,6 @@ export default class SlackService implements TokenRingService {
     this.defaultAgentType = defaultAgentType || "teamLeader";
   }
 
-  private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
-    const agentConfigService = this.agentTeam.requireService(AgentConfigService);
-    if (!this.userAgents.has(userId)) {
-      const agent = await agentConfigService.spawnAgent(this.defaultAgentType, this.agentTeam);
-      this.userAgents.set(userId, agent);
-    }
-    return this.userAgents.get(userId)!;
-  }
-
   async start(agentTeam: AgentTeam): Promise<void> {
     this.running = true;
     this.agentTeam = agentTeam;
@@ -64,24 +55,24 @@ export default class SlackService implements TokenRingService {
     });
 
     // Handle slash commands
-    this.app.command(/.*/, async ({ command, ack, respond }) => {
+    this.app.command(/.*/, async ({command, ack, respond}) => {
       await ack();
       const cmdName = command.command.replace(/^\//, '');
       const agent = await this.getOrCreateAgentForUser(command.user_id);
-      
+
       try {
-        await agent.handleInput({ message: `/${cmdName} ${command.text}` });
+        await agent.handleInput({message: `/${cmdName} ${command.text}`});
       } catch (err) {
         await respond(`Error: ${err instanceof Error ? err.message : String(err)}`);
       }
     });
 
     // Handle app mentions
-    this.app.event('app_mention', async ({ event, say }) => {
-      const { user, text } = event;
+    this.app.event('app_mention', async ({event, say}) => {
+      const {user, text} = event;
 
       if (!user || (this.authorizedUserIds.length > 0 && !this.authorizedUserIds.includes(user))) {
-        await say({ text: "Sorry, you are not authorized to use this bot." });
+        await say({text: "Sorry, you are not authorized to use this bot."});
         return;
       }
 
@@ -96,24 +87,24 @@ export default class SlackService implements TokenRingService {
           response += event.data.content;
         } else if (event.type === 'state.idle') {
           if (response) {
-            await say({ text: response });
+            await say({text: response});
             break;
           }
-          await agent.handleInput({ message: cleanText });
+          await agent.handleInput({message: cleanText});
           response = "";
         }
       }
     });
 
     // Handle direct messages
-    this.app.event('message', async ({ event, say }) => {
+    this.app.event('message', async ({event, say}) => {
       if (event.subtype || event.bot_id) return;
-      
-      const { user, text, channel_type } = event as any;
+
+      const {user, text, channel_type} = event as any;
       if (channel_type !== 'im' || !text) return;
 
       if (this.authorizedUserIds.length > 0 && !this.authorizedUserIds.includes(user)) {
-        await say({ text: "Sorry, you are not authorized to interact with me." });
+        await say({text: "Sorry, you are not authorized to interact with me."});
         return;
       }
 
@@ -125,10 +116,10 @@ export default class SlackService implements TokenRingService {
           response += event.data.content;
         } else if (event.type === 'state.idle') {
           if (response) {
-            await say({ text: response });
+            await say({text: response});
             break;
           }
-          await agent.handleInput({ message: text });
+          await agent.handleInput({message: text});
           response = "";
         }
       }
@@ -136,16 +127,16 @@ export default class SlackService implements TokenRingService {
 
     await this.app.start();
     if (this.channelId) {
-      await this.app.client.chat.postMessage({ 
-        channel: this.channelId, 
-        text: "Slack bot is online!" 
+      await this.app.client.chat.postMessage({
+        channel: this.channelId,
+        text: "Slack bot is online!"
       });
     }
   }
 
   async stop(agentTeam: AgentTeam): Promise<void> {
     this.running = false;
-    
+
     // Clean up all user agents
     for (const [userId, agent] of this.userAgents.entries()) {
       await agentTeam.deleteAgent(agent);
@@ -156,5 +147,14 @@ export default class SlackService implements TokenRingService {
       await this.app.stop();
       this.app = null;
     }
+  }
+
+  private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
+    const agentConfigService = this.agentTeam.requireService(AgentConfigService);
+    if (!this.userAgents.has(userId)) {
+      const agent = await agentConfigService.spawnAgent(this.defaultAgentType, this.agentTeam);
+      this.userAgents.set(userId, agent);
+    }
+    return this.userAgents.get(userId)!;
   }
 }
