@@ -1,6 +1,8 @@
 import {App} from '@slack/bolt';
-import {Agent, AgentConfigService, AgentTeam} from "@tokenring-ai/agent";
-import {TokenRingService} from "@tokenring-ai/agent/types";
+import TokenRingApp from "@tokenring-ai/app"; 
+import {Agent, AgentManager} from "@tokenring-ai/agent";
+
+import {TokenRingService} from "@tokenring-ai/app/types";
 import {z} from "zod";
 
 export const SlackServiceConfigSchema = z.object({
@@ -24,17 +26,18 @@ export default class SlackService implements TokenRingService {
   private channelId?: string;
   private authorizedUserIds: string[] = [];
   private defaultAgentType: string;
-  private app: App | null = null;
-  private agentTeam!: AgentTeam
+  private slackApp: App | null = null;
+  private app: TokenRingApp
   private userAgents = new Map<string, Agent>();
 
-  constructor({botToken, signingSecret, appToken, channelId, authorizedUserIds, defaultAgentType}: SlackServiceConfig) {
+  constructor(app: TokenRingApp, {botToken, signingSecret, appToken, channelId, authorizedUserIds, defaultAgentType}: SlackServiceConfig) {
     if (!botToken) {
       throw new Error("SlackService requires a botToken.");
     }
     if (!signingSecret) {
       throw new Error("SlackService requires a signingSecret.");
     }
+    this.app = app;
     this.botToken = botToken;
     this.signingSecret = signingSecret;
     this.appToken = appToken;
@@ -43,11 +46,10 @@ export default class SlackService implements TokenRingService {
     this.defaultAgentType = defaultAgentType || "teamLeader";
   }
 
-  async start(agentTeam: AgentTeam): Promise<void> {
+  async start(): Promise<void> {
     this.running = true;
-    this.agentTeam = agentTeam;
 
-    this.app = new App({
+    this.slackApp = new App({
       token: this.botToken,
       signingSecret: this.signingSecret,
       socketMode: !!this.appToken,
@@ -55,7 +57,7 @@ export default class SlackService implements TokenRingService {
     });
 
     // Handle slash commands
-    this.app.command(/.*/, async ({command, ack, respond}) => {
+    this.slackApp.command(/.*/, async ({command, ack, respond}) => {
       await ack();
       const cmdName = command.command.replace(/^\//, '');
       const agent = await this.getOrCreateAgentForUser(command.user_id);
@@ -68,7 +70,7 @@ export default class SlackService implements TokenRingService {
     });
 
     // Handle app mentions
-    this.app.event('app_mention', async ({event, say}) => {
+    this.slackApp.event('app_mention', async ({event, say}) => {
       const {user, text} = event;
 
       if (!user || (this.authorizedUserIds.length > 0 && !this.authorizedUserIds.includes(user))) {
@@ -97,7 +99,7 @@ export default class SlackService implements TokenRingService {
     });
 
     // Handle direct messages
-    this.app.event('message', async ({event, say}) => {
+    this.slackApp.event('message', async ({event, say}) => {
       if (event.subtype || event.bot_id) return;
 
       const {user, text, channel_type} = event as any;
@@ -125,34 +127,36 @@ export default class SlackService implements TokenRingService {
       }
     });
 
-    await this.app.start();
+    await this.slackApp.start();
     if (this.channelId) {
-      await this.app.client.chat.postMessage({
+      await this.slackApp.client.chat.postMessage({
         channel: this.channelId,
         text: "Slack bot is online!"
       });
     }
   }
 
-  async stop(agentTeam: AgentTeam): Promise<void> {
+  async stop(): Promise<void> {
+    const agentManager = this.app.requireService(AgentManager);
+
     this.running = false;
 
     // Clean up all user agents
     for (const [userId, agent] of this.userAgents.entries()) {
-      await agentTeam.deleteAgent(agent);
+      await agentManager.deleteAgent(agent);
     }
     this.userAgents.clear();
 
-    if (this.app) {
-      await this.app.stop();
-      this.app = null;
+    if (this.slackApp) {
+      await this.slackApp.stop();
+      this.slackApp = null;
     }
   }
 
   private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
-    const agentConfigService = this.agentTeam.requireService(AgentConfigService);
+    const agentManager = this.app.requireService(AgentManager);
     if (!this.userAgents.has(userId)) {
-      const agent = await agentConfigService.spawnAgent(this.defaultAgentType, this.agentTeam);
+      const agent = await agentManager.spawnAgent(this.defaultAgentType);
       this.userAgents.set(userId, agent);
     }
     return this.userAgents.get(userId)!;

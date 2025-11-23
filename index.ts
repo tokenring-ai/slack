@@ -1,4 +1,5 @@
-import {AgentTeam, TokenRingPackage} from "@tokenring-ai/agent";
+import TokenRingApp from "@tokenring-ai/app";
+import {TokenRingPlugin} from "@tokenring-ai/app";
 import packageJSON from './package.json' with {type: 'json'};
 import SlackBotService, {SlackServiceConfigSchema} from "./SlackService.ts";
 
@@ -6,13 +7,13 @@ export default {
   name: packageJSON.name,
   version: packageJSON.version,
   description: packageJSON.description,
-  install(agentTeam: AgentTeam) {
-    const slackConfig = agentTeam.getConfigSlice("slack", SlackServiceConfigSchema.optional());
+  install(app: TokenRingApp) {
+    const slackConfig = app.getConfigSlice("slack", SlackServiceConfigSchema.optional());
 
     if (slackConfig) {
-      agentTeam.addServices(new SlackBotService(slackConfig));
+      app.addServices(new SlackBotService(app, slackConfig));
     }
   },
-} as TokenRingPackage;
+} as TokenRingPlugin;
 
 export {default as SlackService} from "./SlackService.ts";
