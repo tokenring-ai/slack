@@ -20,12 +20,12 @@ export default class SlackService implements TokenRingService {
   name = "SlackService";
   description = "Provides a Slack bot for interacting with TokenRing agents.";
   private running = false;
-  private botToken: string;
-  private signingSecret: string;
-  private appToken?: string;
-  private channelId?: string;
+  private readonly botToken: string;
+  private readonly signingSecret: string;
+  private readonly appToken?: string;
+  private readonly channelId?: string;
   private authorizedUserIds: string[] = [];
-  private defaultAgentType: string;
+  private readonly defaultAgentType: string;
   private slackApp: App | null = null;
   private app: TokenRingApp
   private userAgents = new Map<string, Agent>();
