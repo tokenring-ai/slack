@@ -1,5 +1,6 @@
 import {App} from '@slack/bolt';
-import TokenRingApp from "@tokenring-ai/app"; 
+import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
+import TokenRingApp from "@tokenring-ai/app";
 import {Agent, AgentManager} from "@tokenring-ai/agent";
 
 import {TokenRingService} from "@tokenring-ai/app/types";
@@ -63,7 +64,29 @@ export default class SlackService implements TokenRingService {
       const agent = await this.getOrCreateAgentForUser(command.user_id);
 
       try {
-        await agent.handleInput({message: `/${cmdName} ${command.text}`});
+        const requestId = agent.handleInput({message: `/${cmdName} ${command.text}`});
+
+        // Set up subscription for command response
+        const unsubscribe = agent.subscribeState(AgentEventState, (state) => {
+          for (const event of state.events) {
+            switch (event.type) {
+              case 'input.handled':
+                if (event.data.requestId === requestId) {
+                  unsubscribe();
+                  break;
+                }
+                break;
+            }
+          }
+        });
+
+        // Set timeout for the response
+        if (agent.config.maxRunTime > 0) {
+          setTimeout(() => {
+            unsubscribe();
+            respond(`Command timed out after ${agent.config.maxRunTime} seconds.`);
+          }, agent.config.maxRunTime * 1000);
+        }
       } catch (err) {
         await respond(`Error: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -82,19 +105,43 @@ export default class SlackService implements TokenRingService {
       if (!cleanText) return;
 
       const agent = await this.getOrCreateAgentForUser(user);
-      let response = "";
 
-      for await (const event of agent.events(new AbortController().signal)) {
-        if (event.type === 'output.chat') {
-          response += event.data.content;
-        } else if (event.type === 'state.idle') {
-          if (response) {
-            await say({text: response});
-            break;
+      // Wait for agent to be idle before sending new message
+      const initialState = await agent.waitForState(AgentEventState, (state) => state.idle);
+      const eventCursor = initialState.getEventCursorFromCurrentPosition();
+
+      // Send the message to the agent
+      const requestId = agent.handleInput({message: cleanText});
+
+      // Subscribe to agent events to process the response
+      const unsubscribe = agent.subscribeState(AgentEventState, (state) => {
+        for (const event of state.yieldEventsByCursor(eventCursor)) {
+          switch (event.type) {
+            case 'output.chat':
+              this.handleChatOutput(say, event.data.content);
+              break;
+            case 'output.system':
+              this.handleSystemOutput(say, event.data.message, event.data.level);
+              break;
+            case 'input.handled':
+              if (event.data.requestId === requestId) {
+                unsubscribe();
+                // If no response was sent, send a default message
+                if (!this.lastResponseSent) {
+                  say({text: "No response received from agent."});
+                }
+              }
+              break;
           }
-          await agent.handleInput({message: cleanText});
-          response = "";
         }
+      });
+
+      // Set timeout for the response
+      if (agent.config.maxRunTime > 0) {
+        setTimeout(() => {
+          unsubscribe();
+          say({text: `Agent timed out after ${agent.config.maxRunTime} seconds.`});
+        }, agent.config.maxRunTime * 1000);
       }
     });
 
@@ -111,19 +158,43 @@ export default class SlackService implements TokenRingService {
       }
 
       const agent = await this.getOrCreateAgentForUser(user);
-      let response = "";
 
-      for await (const event of agent.events(new AbortController().signal)) {
-        if (event.type === 'output.chat') {
-          response += event.data.content;
-        } else if (event.type === 'state.idle') {
-          if (response) {
-            await say({text: response});
-            break;
+      // Wait for agent to be idle before sending new message
+      const initialState = await agent.waitForState(AgentEventState, (state) => state.idle);
+      const eventCursor = initialState.getEventCursorFromCurrentPosition();
+
+      // Send the message to the agent
+      const requestId = agent.handleInput({message: text});
+
+      // Subscribe to agent events to process the response
+      const unsubscribe = agent.subscribeState(AgentEventState, (state) => {
+        for (const event of state.yieldEventsByCursor(eventCursor)) {
+          switch (event.type) {
+            case 'output.chat':
+              this.handleChatOutput(say, event.data.content);
+              break;
+            case 'output.system':
+              this.handleSystemOutput(say, event.data.message, event.data.level);
+              break;
+            case 'input.handled':
+              if (event.data.requestId === requestId) {
+                unsubscribe();
+                // If no response was sent, send a default message
+                if (!this.lastResponseSent) {
+                  say({text: "No response received from agent."});
+                }
+              }
+              break;
           }
-          await agent.handleInput({message: text});
-          response = "";
         }
+      });
+
+      // Set timeout for the response
+      if (agent.config.maxRunTime > 0) {
+        setTimeout(() => {
+          unsubscribe();
+          say({text: `Agent timed out after ${agent.config.maxRunTime} seconds.`});
+        }, agent.config.maxRunTime * 1000);
       }
     });
 
@@ -134,6 +205,19 @@ export default class SlackService implements TokenRingService {
         text: "Slack bot is online!"
       });
     }
+  }
+
+  private lastResponseSent = false;
+
+  private async handleChatOutput(say: any, content: string): Promise<void> {
+    // Accumulate chat content and send when complete
+    this.lastResponseSent = true;
+    await say({text: content});
+  }
+
+  private async handleSystemOutput(say: any, message: string, level: string): Promise<void> {
+    const formattedMessage = `[${level.toUpperCase()}]: ${message}`;
+    await say({text: formattedMessage});
   }
 
   async stop(): Promise<void> {
