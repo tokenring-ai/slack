@@ -4,6 +4,7 @@ import TokenRingApp from "@tokenring-ai/app";
 import {Agent, AgentManager} from "@tokenring-ai/agent";
 
 import {TokenRingService} from "@tokenring-ai/app/types";
+import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
 import {z} from "zod";
 
 export const SlackServiceConfigSchema = z.object({
@@ -47,7 +48,7 @@ export default class SlackService implements TokenRingService {
     this.defaultAgentType = defaultAgentType || "teamLeader";
   }
 
-  async start(): Promise<void> {
+  async run(signal: AbortSignal): Promise<void> {
     this.running = true;
 
     this.slackApp = new App({
@@ -205,6 +206,22 @@ export default class SlackService implements TokenRingService {
         text: "Slack bot is online!"
       });
     }
+    return waitForAbort(signal, async (ev) => {
+      const agentManager = this.app.requireService(AgentManager);
+
+      this.running = false;
+
+      // Clean up all user agents
+      for (const [userId, agent] of this.userAgents.entries()) {
+        await agentManager.deleteAgent(agent);
+      }
+      this.userAgents.clear();
+
+      if (this.slackApp) {
+        await this.slackApp.stop();
+        this.slackApp = null;
+      }
+    });
   }
 
   private lastResponseSent = false;
@@ -220,22 +237,6 @@ export default class SlackService implements TokenRingService {
     await say({text: formattedMessage});
   }
 
-  async stop(): Promise<void> {
-    const agentManager = this.app.requireService(AgentManager);
-
-    this.running = false;
-
-    // Clean up all user agents
-    for (const [userId, agent] of this.userAgents.entries()) {
-      await agentManager.deleteAgent(agent);
-    }
-    this.userAgents.clear();
-
-    if (this.slackApp) {
-      await this.slackApp.stop();
-      this.slackApp = null;
-    }
-  }
 
   private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
     const agentManager = this.app.requireService(AgentManager);
