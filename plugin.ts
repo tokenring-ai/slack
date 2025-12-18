@@ -15,4 +15,4 @@ export default {
       app.addServices(new SlackBotService(app, slackConfig));
     }
   },
-} as TokenRingPlugin;
+} satisfies TokenRingPlugin;
