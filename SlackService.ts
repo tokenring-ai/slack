@@ -119,10 +119,16 @@ export default class SlackService implements TokenRingService {
         for (const event of state.yieldEventsByCursor(eventCursor)) {
           switch (event.type) {
             case 'output.chat':
-              this.handleChatOutput(say, event.content);
+              this.handleChatOutput(say, event.message);
               break;
-            case 'output.system':
-              this.handleSystemOutput(say, event.message, event.level);
+            case 'output.info':
+              this.handleSystemOutput(say, event.message, 'info');
+              break;
+            case 'output.warning':
+              this.handleSystemOutput(say, event.message, 'warning');
+              break;
+            case 'output.error':
+              this.handleSystemOutput(say, event.message, 'error');
               break;
             case 'input.handled':
               if (event.requestId === requestId) {
@@ -172,10 +178,16 @@ export default class SlackService implements TokenRingService {
         for (const event of state.yieldEventsByCursor(eventCursor)) {
           switch (event.type) {
             case 'output.chat':
-              this.handleChatOutput(say, event.content);
+              this.handleChatOutput(say, event.message);
               break;
-            case 'output.system':
-              this.handleSystemOutput(say, event.message, event.level);
+            case 'output.info':
+              this.handleSystemOutput(say, event.message, 'info');
+              break;
+            case 'output.warning':
+              this.handleSystemOutput(say, event.message, 'warning');
+              break;
+            case 'output.error':
+              this.handleSystemOutput(say, event.message, 'error');
               break;
             case 'input.handled':
               if (event.requestId === requestId) {
@@ -226,10 +238,10 @@ export default class SlackService implements TokenRingService {
 
   private lastResponseSent = false;
 
-  private async handleChatOutput(say: any, content: string): Promise<void> {
+  private async handleChatOutput(say: any, message: string): Promise<void> {
     // Accumulate chat content and send when complete
     this.lastResponseSent = true;
-    await say({text: content});
+    await say({text: message});
   }
 
   private async handleSystemOutput(say: any, message: string, level: string): Promise<void> {
