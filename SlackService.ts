@@ -12,8 +12,8 @@ export const SlackServiceConfigSchema = z.object({
   signingSecret: z.string().min(1, "Signing secret is required"),
   appToken: z.string().optional(),
   channelId: z.string().optional(),
-  authorizedUserIds: z.array(z.string()).optional(),
-  defaultAgentType: z.string().optional()
+  authorizedUserIds: z.array(z.string()).default([]),
+  defaultAgentType: z.string().default("teamLeader")
 });
 
 export type SlackServiceConfig = z.infer<typeof SlackServiceConfigSchema>;
@@ -22,40 +22,19 @@ export default class SlackService implements TokenRingService {
   name = "SlackService";
   description = "Provides a Slack bot for interacting with TokenRing agents.";
   private running = false;
-  private readonly botToken: string;
-  private readonly signingSecret: string;
-  private readonly appToken?: string;
-  private readonly channelId?: string;
-  private authorizedUserIds: string[] = [];
-  private readonly defaultAgentType: string;
   private slackApp: App | null = null;
-  private app: TokenRingApp
   private userAgents = new Map<string, Agent>();
 
-  constructor(app: TokenRingApp, {botToken, signingSecret, appToken, channelId, authorizedUserIds, defaultAgentType}: SlackServiceConfig) {
-    if (!botToken) {
-      throw new Error("SlackService requires a botToken.");
-    }
-    if (!signingSecret) {
-      throw new Error("SlackService requires a signingSecret.");
-    }
-    this.app = app;
-    this.botToken = botToken;
-    this.signingSecret = signingSecret;
-    this.appToken = appToken;
-    this.channelId = channelId;
-    this.authorizedUserIds = authorizedUserIds || [];
-    this.defaultAgentType = defaultAgentType || "teamLeader";
-  }
+  constructor(public app: TokenRingApp, private config: z.output<typeof SlackServiceConfigSchema>) {}
 
   async run(signal: AbortSignal): Promise<void> {
     this.running = true;
 
     this.slackApp = new App({
-      token: this.botToken,
-      signingSecret: this.signingSecret,
-      socketMode: !!this.appToken,
-      appToken: this.appToken,
+      token: this.config.botToken,
+      signingSecret: this.config.signingSecret,
+      socketMode: !!this.config.appToken,
+      appToken: this.config.appToken,
     });
 
     // Handle slash commands
@@ -97,7 +76,7 @@ export default class SlackService implements TokenRingService {
     this.slackApp.event('app_mention', async ({event, say}) => {
       const {user, text} = event;
 
-      if (!user || (this.authorizedUserIds.length > 0 && !this.authorizedUserIds.includes(user))) {
+      if (!user || (this.config.authorizedUserIds.length > 0 && !this.config.authorizedUserIds.includes(user))) {
         await say({text: "Sorry, you are not authorized to use this bot."});
         return;
       }
@@ -159,7 +138,7 @@ export default class SlackService implements TokenRingService {
       const {user, text, channel_type} = event as any;
       if (channel_type !== 'im' || !text) return;
 
-      if (this.authorizedUserIds.length > 0 && !this.authorizedUserIds.includes(user)) {
+      if (this.config.authorizedUserIds.length > 0 && !this.config.authorizedUserIds.includes(user)) {
         await say({text: "Sorry, you are not authorized to interact with me."});
         return;
       }
@@ -212,9 +191,9 @@ export default class SlackService implements TokenRingService {
     });
 
     await this.slackApp.start();
-    if (this.channelId) {
+    if (this.config.channelId) {
       await this.slackApp.client.chat.postMessage({
-        channel: this.channelId,
+        channel: this.config.channelId,
         text: "Slack bot is online!"
       });
     }
@@ -253,7 +232,7 @@ export default class SlackService implements TokenRingService {
   private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
     const agentManager = this.app.requireService(AgentManager);
     if (!this.userAgents.has(userId)) {
-      const agent = await agentManager.spawnAgent({ agentType: this.defaultAgentType, headless: false });
+      const agent = await agentManager.spawnAgent({ agentType: this.config.defaultAgentType, headless: false });
       this.userAgents.set(userId, agent);
     }
     return this.userAgents.get(userId)!;
