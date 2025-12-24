@@ -15,11 +15,12 @@ This package integrates Slack with TokenRing agents, enabling natural conversati
 - **Socket Mode**: Support for both HTTP events and Socket Mode (no public endpoint required)
 - **Authorization**: Optional user whitelist for restricted access
 - **Plugin Architecture**: Automatically integrates with TokenRing applications
+- **Persistent State**: User agents maintain conversation context across sessions
 
 ## Installation
 
 ```bash
-npm install @tokenring-ai/slack
+bun install @tokenring-ai/slack
 # or
 bun add @tokenring-ai/slack
 ```
@@ -174,10 +175,11 @@ SLACK_AUTHORIZED_USERS=U06T1LWJG,UABCDEF123  # Optional comma-separated list
 ## Dependencies
 
 - `@slack/bolt` ^4.6.0 - Slack app framework
-- `@slack/web-api` ^7.12.0 - Slack web API client
-- `@tokenring-ai/chat` ^0.1.0 - TokenRing chat functionality
-- `@tokenring-ai/agent` ^0.1.0 - TokenRing agent system
+- `@slack/web-api` ^7.13.0 - Slack web API client
+- `@tokenring-ai/chat` ^0.2.0 - TokenRing chat functionality
+- `@tokenring-ai/agent` ^0.2.0 - TokenRing agent system
 - `zod` ^4.1.13 - Schema validation
+- `@tokenring-ai/app` ^0.2.0 - TokenRing application framework
 
 ## Notes
 
@@ -186,6 +188,8 @@ SLACK_AUTHORIZED_USERS=U06T1LWJG,UABCDEF123  # Optional comma-separated list
 - **Cleanup**: Agents are automatically cleaned up when the service stops
 - **Authorization**: If `authorizedUserIds` is empty, all users can interact. Set a list to restrict access
 - **Plugin System**: Designed to work seamlessly with TokenRing's plugin architecture
+- **Event Handling**: The service handles slash commands, mentions, and direct messages
+- **Response Formatting**: Differentiates between chat messages, info, warnings, and errors
 
 ## License
 
