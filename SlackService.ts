@@ -8,8 +8,8 @@ import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
 import {z} from "zod";
 
 export const SlackServiceConfigSchema = z.object({
-  botToken: z.string().min(1, "Bot token is required"),
-  signingSecret: z.string().min(1, "Signing secret is required"),
+  botToken: z.string().min(1, "Bot token is required").refine(s => s.trim().length > 0, "Bot token cannot be whitespace"),
+  signingSecret: z.string().min(1, "Signing secret is required").refine(s => s.trim().length > 0, "Signing secret cannot be whitespace"),
   appToken: z.string().optional(),
   channelId: z.string().optional(),
   authorizedUserIds: z.array(z.string()).default([]),
