@@ -16,6 +16,8 @@ This package integrates Slack with TokenRing agents, enabling natural conversati
 - **Authorization**: Optional user whitelist for restricted access
 - **Plugin Architecture**: Automatically integrates with TokenRing applications
 - **Persistent State**: User agents maintain conversation context across sessions
+- **Event Handling**: Comprehensive handling of chat, info, warning, and error messages
+- **Timeout Management**: Configurable response timeouts for commands and messages
 
 ## Installation
 
@@ -135,14 +137,16 @@ new SlackService(
 Configuration interface for the Slack service.
 
 ```typescript
-interface SlackServiceConfig {
-  botToken: string;           // Required: Slack bot token (xoxb-...)
-  signingSecret: string;      // Required: Slack signing secret
-  appToken?: string;          // Optional: Socket mode token (xapp-...)
-  channelId?: string;         // Optional: Channel for startup announcements
-  authorizedUserIds?: string[]; // Optional: List of authorized user IDs
-  defaultAgentType?: string;  // Optional: Default agent type (defaults to "teamLeader")
-}
+export const SlackServiceConfigSchema = z.object({
+  botToken: z.string().min(1, "Bot token is required").refine(s => s.trim().length > 0, "Bot token cannot be whitespace"),
+  signingSecret: z.string().min(1, "Signing secret is required").refine(s => s.trim().length > 0, "Signing secret cannot be whitespace"),
+  appToken?: z.string(),
+  channelId?: z.string(),
+  authorizedUserIds: z.array(z.string()).default([]),
+  defaultAgentType: z.string().default("teamLeader")
+});
+
+export type SlackServiceConfig = z.infer<typeof SlackServiceConfigSchema>;
 ```
 
 ### Exports
@@ -172,6 +176,33 @@ SLACK_CHANNEL_ID=C1234567890        # Optional for startup announcements
 SLACK_AUTHORIZED_USERS=U06T1LWJG,UABCDEF123  # Optional comma-separated list
 ```
 
+### Error Handling
+
+The service automatically handles different message types:
+
+- **Chat messages**: Direct user responses
+- **Info messages**: System information with `[INFO]:` prefix
+- **Warning messages**: System warnings with `[WARNING]:` prefix  
+- **Error messages**: System errors with `[ERROR]:` prefix
+
+## Event System
+
+The Slack service handles multiple event types:
+
+- **Slash Commands**: `/command text`
+- **App Mentions**: Bot mentioned in channels
+- **Direct Messages**: Private messages to the bot
+- **Socket Mode**: Real-time event handling when enabled
+
+## State Management
+
+Each user maintains their own agent instance with:
+
+- Persistent conversation history
+- Context across sessions
+- Individual configuration
+- Automatic cleanup when the service stops
+
 ## Dependencies
 
 - `@slack/bolt` ^4.6.0 - Slack app framework
@@ -190,6 +221,7 @@ SLACK_AUTHORIZED_USERS=U06T1LWJG,UABCDEF123  # Optional comma-separated list
 - **Plugin System**: Designed to work seamlessly with TokenRing's plugin architecture
 - **Event Handling**: The service handles slash commands, mentions, and direct messages
 - **Response Formatting**: Differentiates between chat messages, info, warnings, and errors
+- **Timeout Management**: Configurable timeouts prevent long-running operations
 
 ## License
 
