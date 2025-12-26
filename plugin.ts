@@ -1,18 +1,20 @@
-import TokenRingApp from "@tokenring-ai/app";
 import {TokenRingPlugin} from "@tokenring-ai/app";
+import {z} from "zod";
 import packageJSON from './package.json' with {type: 'json'};
 import SlackBotService, {SlackServiceConfigSchema} from "./SlackService.ts";
 
+const packageConfigSchema = z.object({
+  slack: SlackServiceConfigSchema.optional()
+});
 
 export default {
   name: packageJSON.name,
   version: packageJSON.version,
   description: packageJSON.description,
-  install(app: TokenRingApp) {
-    const slackConfig = app.getConfigSlice("slack", SlackServiceConfigSchema.optional());
-
-    if (slackConfig) {
-      app.addServices(new SlackBotService(app, slackConfig));
+  install(app, config) {
+    if (config.slack) {
+      app.addServices(new SlackBotService(app, config.slack));
     }
   },
-} satisfies TokenRingPlugin;
+  config: packageConfigSchema
+} satisfies TokenRingPlugin<typeof packageConfigSchema>;
