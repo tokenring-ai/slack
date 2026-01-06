@@ -1,5 +1,6 @@
 import {App} from '@slack/bolt';
 import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
+import {AgentExecutionState} from "@tokenring-ai/agent/state/agentExecutionState";
 import TokenRingApp from "@tokenring-ai/app";
 import {Agent, AgentManager} from "@tokenring-ai/agent";
 
@@ -87,8 +88,8 @@ export default class SlackService implements TokenRingService {
       const agent = await this.getOrCreateAgentForUser(user);
 
       // Wait for agent to be idle before sending new message
-      const initialState = await agent.waitForState(AgentEventState, (state) => state.idle);
-      const eventCursor = initialState.getEventCursorFromCurrentPosition();
+      await agent.waitForState(AgentExecutionState, (state) => state.idle);
+      const eventCursor = agent.getState(AgentEventState).getEventCursorFromCurrentPosition();
 
       // Send the message to the agent
       const requestId = agent.handleInput({message: cleanText});
@@ -146,8 +147,8 @@ export default class SlackService implements TokenRingService {
       const agent = await this.getOrCreateAgentForUser(user);
 
       // Wait for agent to be idle before sending new message
-      const initialState = await agent.waitForState(AgentEventState, (state) => state.idle);
-      const eventCursor = initialState.getEventCursorFromCurrentPosition();
+      await agent.waitForState(AgentExecutionState, (state) => state.idle);
+      const eventCursor = agent.getState(AgentEventState).getEventCursorFromCurrentPosition();
 
       // Send the message to the agent
       const requestId = agent.handleInput({message: text});
