@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { App } from '@slack/bolt';
+import {App} from '@slack/bolt';
+import AgentManagerImpl from '@tokenring-ai/agent/services/AgentManager';
+import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent";
 import TokenRingApp from '@tokenring-ai/app';
 import createTestingApp from "@tokenring-ai/app/test/createTestingApp";
-import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent";
-import { Agent, AgentManager } from '@tokenring-ai/agent';
-import AgentManagerImpl from '@tokenring-ai/agent/services/AgentManager';
-import SlackService, { SlackServiceConfig } from './SlackService';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import SlackService, {SlackServiceConfig} from './SlackService';
 
 const mockWaitForAbort = vi.fn();
 vi.mock('@tokenring-ai/utility/promise/waitForAbort', () => ({

@@ -1,8 +1,8 @@
 import {App} from '@slack/bolt';
+import {Agent, AgentManager} from "@tokenring-ai/agent";
 import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
 import {AgentExecutionState} from "@tokenring-ai/agent/state/agentExecutionState";
 import TokenRingApp from "@tokenring-ai/app";
-import {Agent, AgentManager} from "@tokenring-ai/agent";
 
 import {TokenRingService} from "@tokenring-ai/app/types";
 import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
