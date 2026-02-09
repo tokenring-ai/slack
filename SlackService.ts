@@ -20,7 +20,7 @@ export const SlackServiceConfigSchema = z.object({
 export type SlackServiceConfig = z.infer<typeof SlackServiceConfigSchema>;
 
 export default class SlackService implements TokenRingService {
-  name = "SlackService";
+  readonly name = "SlackService";
   description = "Provides a Slack bot for interacting with TokenRing agents.";
   private running = false;
   private slackApp: App | null = null;
