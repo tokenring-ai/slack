@@ -1,241 +1,40 @@
-import {App} from '@slack/bolt';
-import {Agent, AgentManager} from "@tokenring-ai/agent";
-import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
-import {AgentExecutionState} from "@tokenring-ai/agent/state/agentExecutionState";
 import TokenRingApp from "@tokenring-ai/app";
-
 import {TokenRingService} from "@tokenring-ai/app/types";
 import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
-import {z} from "zod";
-
-export const SlackServiceConfigSchema = z.object({
-  botToken: z.string().min(1, "Bot token is required").refine(s => s.trim().length > 0, "Bot token cannot be whitespace"),
-  signingSecret: z.string().min(1, "Signing secret is required").refine(s => s.trim().length > 0, "Signing secret cannot be whitespace"),
-  appToken: z.string().optional(),
-  channelId: z.string().optional(),
-  authorizedUserIds: z.array(z.string()).default([]),
-  defaultAgentType: z.string().default("teamLeader")
-});
-
-export type SlackServiceConfig = z.infer<typeof SlackServiceConfigSchema>;
+import KeyedRegistry from "@tokenring-ai/utility/registry/KeyedRegistry";
+import type {ParsedSlackServiceConfig} from "./schema.ts";
+import SlackBot from './SlackBot.ts';
 
 export default class SlackService implements TokenRingService {
   readonly name = "SlackService";
-  description = "Provides a Slack bot for interacting with TokenRing agents.";
-  private running = false;
-  private slackApp: App | null = null;
-  private userAgents = new Map<string, Agent>();
+  description = "Manages multiple Slack bots for interacting with TokenRing agents.";
 
-  constructor(public app: TokenRingApp, private config: z.output<typeof SlackServiceConfigSchema>) {}
+  private bots = new KeyedRegistry<SlackBot>();
+
+  getAvailableBots = this.bots.getAllItemNames;
+  getBot = this.bots.getItemByName;
+
+  constructor(private app: TokenRingApp, private options: ParsedSlackServiceConfig) {}
 
   async run(signal: AbortSignal): Promise<void> {
-    this.running = true;
+    this.app.serviceOutput("Starting Slack bots...");
 
-    this.slackApp = new App({
-      token: this.config.botToken,
-      signingSecret: this.config.signingSecret,
-      socketMode: !!this.config.appToken,
-      appToken: this.config.appToken,
-    });
+    for (const [botName, botConfig] of Object.entries(this.options.bots)) {
+      const bot = new SlackBot(
+        this.app,
+        botName,
+        botConfig
+      );
+      await bot.start();
 
-    // Handle slash commands
-    this.slackApp.command(/.*/, async ({command, ack, respond}) => {
-      await ack();
-      const cmdName = command.command.replace(/^\//, '');
-      const agent = await this.getOrCreateAgentForUser(command.user_id);
-
-      try {
-        const requestId = agent.handleInput({message: `/${cmdName} ${command.text}`});
-
-        // Set up subscription for command response
-        const unsubscribe = agent.subscribeState(AgentEventState, (state) => {
-          for (const event of state.events) {
-            switch (event.type) {
-              case 'input.handled':
-                if (event.requestId === requestId) {
-                  unsubscribe();
-                  break;
-                }
-                break;
-            }
-          }
-        });
-
-        // Set timeout for the response
-        if (agent.config.maxRunTime > 0) {
-          setTimeout(() => {
-            unsubscribe();
-            respond(`Command timed out after ${agent.config.maxRunTime} seconds.`);
-          }, agent.config.maxRunTime * 1000);
-        }
-      } catch (err) {
-        await respond(`Error: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    });
-
-    // Handle app mentions
-    this.slackApp.event('app_mention', async ({event, say}) => {
-      const {user, text} = event;
-
-      if (!user || (this.config.authorizedUserIds.length > 0 && !this.config.authorizedUserIds.includes(user))) {
-        await say({text: "Sorry, you are not authorized to use this bot."});
-        return;
-      }
-
-      const cleanText = text.replace(/^<.*?> /, "").trim();
-      if (!cleanText) return;
-
-      const agent = await this.getOrCreateAgentForUser(user);
-
-      // Wait for agent to be idle before sending new message
-      await agent.waitForState(AgentExecutionState, (state) => state.idle);
-      const eventCursor = agent.getState(AgentEventState).getEventCursorFromCurrentPosition();
-
-      // Send the message to the agent
-      const requestId = agent.handleInput({message: cleanText});
-
-      // Subscribe to agent events to process the response
-      const unsubscribe = agent.subscribeState(AgentEventState, (state) => {
-        for (const event of state.yieldEventsByCursor(eventCursor)) {
-          switch (event.type) {
-            case 'output.chat':
-              this.handleChatOutput(say, event.message);
-              break;
-            case 'output.info':
-              this.handleSystemOutput(say, event.message, 'info');
-              break;
-            case 'output.warning':
-              this.handleSystemOutput(say, event.message, 'warning');
-              break;
-            case 'output.error':
-              this.handleSystemOutput(say, event.message, 'error');
-              break;
-            case 'input.handled':
-              if (event.requestId === requestId) {
-                unsubscribe();
-                // If no response was sent, send a default message
-                if (!this.lastResponseSent) {
-                  say({text: "No response received from agent."});
-                }
-              }
-              break;
-          }
-        }
-      });
-
-      // Set timeout for the response
-      if (agent.config.maxRunTime > 0) {
-        setTimeout(() => {
-          unsubscribe();
-          say({text: `Agent timed out after ${agent.config.maxRunTime} seconds.`});
-        }, agent.config.maxRunTime * 1000);
-      }
-    });
-
-    // Handle direct messages
-    this.slackApp.event('message', async ({event, say}) => {
-      if (event.subtype || event.bot_id) return;
-
-      const {user, text, channel_type} = event as any;
-      if (channel_type !== 'im' || !text) return;
-
-      if (this.config.authorizedUserIds.length > 0 && !this.config.authorizedUserIds.includes(user)) {
-        await say({text: "Sorry, you are not authorized to interact with me."});
-        return;
-      }
-
-      const agent = await this.getOrCreateAgentForUser(user);
-
-      // Wait for agent to be idle before sending new message
-      await agent.waitForState(AgentExecutionState, (state) => state.idle);
-      const eventCursor = agent.getState(AgentEventState).getEventCursorFromCurrentPosition();
-
-      // Send the message to the agent
-      const requestId = agent.handleInput({message: text});
-
-      // Subscribe to agent events to process the response
-      const unsubscribe = agent.subscribeState(AgentEventState, (state) => {
-        for (const event of state.yieldEventsByCursor(eventCursor)) {
-          switch (event.type) {
-            case 'output.chat':
-              this.handleChatOutput(say, event.message);
-              break;
-            case 'output.info':
-              this.handleSystemOutput(say, event.message, 'info');
-              break;
-            case 'output.warning':
-              this.handleSystemOutput(say, event.message, 'warning');
-              break;
-            case 'output.error':
-              this.handleSystemOutput(say, event.message, 'error');
-              break;
-            case 'input.handled':
-              if (event.requestId === requestId) {
-                unsubscribe();
-                // If no response was sent, send a default message
-                if (!this.lastResponseSent) {
-                  say({text: "No response received from agent."});
-                }
-              }
-              break;
-          }
-        }
-      });
-
-      // Set timeout for the response
-      if (agent.config.maxRunTime > 0) {
-        setTimeout(() => {
-          unsubscribe();
-          say({text: `Agent timed out after ${agent.config.maxRunTime} seconds.`});
-        }, agent.config.maxRunTime * 1000);
-      }
-    });
-
-    await this.slackApp.start();
-    if (this.config.channelId) {
-      await this.slackApp.client.chat.postMessage({
-        channel: this.config.channelId,
-        text: "Slack bot is online!"
-      });
+      this.bots.register(botName, bot);
     }
-    return waitForAbort(signal, async (ev) => {
-      const agentManager = this.app.requireService(AgentManager);
 
-      this.running = false;
-
-      // Clean up all user agents
-      for (const [userId, agent] of this.userAgents.entries()) {
-        await agentManager.deleteAgent(agent);
-      }
-      this.userAgents.clear();
-
-      if (this.slackApp) {
-        await this.slackApp.stop();
-        this.slackApp = null;
+    return waitForAbort(signal, async () => {
+      for (const [botName, bot] of this.bots.entries()) {
+        await bot.stop();
+        this.bots.unregister(botName);
       }
     });
-  }
-
-  private lastResponseSent = false;
-
-  private async handleChatOutput(say: any, message: string): Promise<void> {
-    // Accumulate chat content and send when complete
-    this.lastResponseSent = true;
-    await say({text: message});
-  }
-
-  private async handleSystemOutput(say: any, message: string, level: string): Promise<void> {
-    const formattedMessage = `[${level.toUpperCase()}]: ${message}`;
-    await say({text: formattedMessage});
-  }
-
-
-  private async getOrCreateAgentForUser(userId: string): Promise<Agent> {
-    const agentManager = this.app.requireService(AgentManager);
-    if (!this.userAgents.has(userId)) {
-      const agent = await agentManager.spawnAgent({ agentType: this.config.defaultAgentType, headless: false });
-      this.userAgents.set(userId, agent);
-    }
-    return this.userAgents.get(userId)!;
   }
 }

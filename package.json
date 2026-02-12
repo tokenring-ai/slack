@@ -4,12 +4,13 @@
   "version": "0.2.0",
   "dependencies": {
     "@tokenring-ai/app": "0.2.0",
-    "zod": "^4.3.6",
-    "@slack/bolt": "^4.6.0",
-    "@slack/web-api": "^7.13.0",
     "@tokenring-ai/chat": "0.2.0",
     "@tokenring-ai/agent": "0.2.0",
-    "@tokenring-ai/utility": "0.2.0"
+    "@tokenring-ai/utility": "0.2.0",
+    "@tokenring-ai/escalation": "0.2.0",
+    "@slack/bolt": "^4.6.0",
+    "@slack/web-api": "^7.13.0",
+    "zod": "^4.3.6"
   },
   "exports": {
     ".": "./index.ts",
