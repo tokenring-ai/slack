@@ -147,7 +147,7 @@ export default class SlackBot {
           }
         }
       },
-      close: async () => {
+      [Symbol.asyncDispose]: async () => {
         channel.closed = true;
         if (channel.resolve) {
           channel.resolve({ value: undefined, done: true });
