@@ -4,10 +4,11 @@ A TokenRing plugin providing Slack bot integration for AI-powered agent interact
 
 ## Overview
 
-This package provides a Slack bot service that integrates with TokenRing agents, enabling natural language conversations through Slack. Each Slack channel gets its own dedicated agent instance that maintains conversation history and context. The service handles message routing, event processing, and automatic agent management.
+This package provides a Slack bot service that integrates with TokenRing agents, enabling natural language conversations through Slack. Each Slack channel gets its own dedicated agent instance that maintains conversation history and context. The service handles message routing, event processing, and automatic agent management. It also supports escalation workflows for agent-to-human communication.
 
 ## Features
 
+- **Multiple Bot Support**: Manage multiple discrete Slack bots in a single service
 - **Per-Channel Agents**: Each Slack channel gets a dedicated agent with persistent chat history
 - **Event-Driven Communication**: Handles agent events and sends responses back to Slack
 - **Direct Messaging with Threads**: Send messages to channels and await responses via Slack thread mechanism
@@ -18,7 +19,6 @@ This package provides a Slack bot service that integrates with TokenRing agents,
 - **Timeout Management**: Configurable agent timeout handling
 - **Graceful Shutdown**: Proper cleanup of all channel agents on shutdown
 - **Plugin Integration**: Seamless integration with TokenRing plugin system
-- **Multiple Bots**: Support for multiple discrete Slack bots in a single service
 
 ## Installation
 
@@ -28,47 +28,73 @@ bun install @tokenring-ai/slack
 
 ## Configuration
 
-The service uses Zod schema validation for configuration:
+The package uses Zod schema validation for configuration with a nested structure for multiple bots.
 
-### Required
+### Required Configuration
 
-- **`bots`** (object): Record of bot configurations, each containing:
+- **`bots`** (object): Record of bot configurations, where each key is a bot name
+- Each bot configuration contains:
   - **`name`** (string): Bot display name
   - **`botToken`** (string): Slack bot token (xoxb-...)
   - **`signingSecret`** (string): Slack signing secret for request verification
-  - **`channels`** (object): Record of channel configurations
+  - **`channels`** (object): Record of channel configurations for this bot
+  - Each channel configuration contains:
+    - **`channelId`** (string): Slack channel ID
+    - **`allowedUsers`** (string[]): Array of Slack user IDs allowed to interact (defaults to empty array for all users)
+    - **`agentType`** (string): Agent type to create for the channel
 
-### Optional
+### Optional Configuration
 
 - **`appToken`** (string): App-level token for Socket Mode (xapp-...)
-- **`allowedUsers`** (string[]): Array of Slack user IDs allowed to interact per channel
-- **`agentType`** (string): Agent type to create for the channel
 
 ```typescript
-export const SlackServiceConfigSchema = z.object({
-  bots: z.record(z.string(), z.object({
-    name: z.string(),
-    botToken: z.string().min(1, "Bot token is required"),
-    appToken: z.string().optional(),
-    signingSecret: z.string().min(1, "Signing secret is required"),
-    channels: z.record(z.string(), z.object({
-      channelId: z.string(),
-      allowedUsers: z.array(z.string()).default([]),
-      agentType: z.string(),
-    }))
+import {z} from "zod";
+
+// Bot configuration schema
+const SlackBotConfigSchema = z.object({
+  name: z.string(),
+  botToken: z.string().min(1, "Bot token is required"),
+  appToken: z.string().optional(),
+  signingSecret: z.string().min(1, "Signing secret is required"),
+  channels: z.record(z.string(), z.object({
+    channelId: z.string(),
+    allowedUsers: z.array(z.string()).default([]),
+    agentType: z.string(),
   }))
 });
 
+// Service configuration schema
+const SlackServiceConfigSchema = z.object({
+  bots: z.record(z.string(), SlackBotConfigSchema)
+});
+
 export type ParsedSlackServiceConfig = z.output<typeof SlackServiceConfigSchema>;
+```
+
+### Escalation Provider Configuration
+
+The escalation provider uses a simple configuration schema:
+
+```typescript
+const SlackEscalationProviderConfigSchema = z.object({
+  type: z.literal('slack'),
+  bot: z.string(),
+  channel: z.string(),
+});
+
+export type ParsedSlackEscalationProviderConfig = z.output<typeof SlackEscalationProviderConfigSchema>;
 ```
 
 ## Usage
 
 ### Plugin Installation
 
+Install the plugin with your TokenRing application:
+
 ```typescript
 import TokenRingApp from '@tokenring-ai/app';
 import slackPlugin from '@tokenring-ai/slack';
+import escalationPlugin from '@tokenring-ai/escalation';
 
 const app = new TokenRingApp({
   slack: {
@@ -77,7 +103,7 @@ const app = new TokenRingApp({
         name: "Main Bot",
         botToken: process.env.SLACK_BOT_TOKEN!,
         signingSecret: process.env.SLACK_SIGNING_SECRET!,
-        appToken: process.env.SLACK_APP_TOKEN, // Optional
+        appToken: process.env.SLACK_APP_TOKEN, // Optional for Socket Mode
         channels: {
           "engineering": {
             channelId: "C1234567890",
@@ -92,18 +118,33 @@ const app = new TokenRingApp({
         }
       }
     }
+  },
+  escalation: {
+    providers: {
+      slack: {
+        type: 'slack',
+        bot: 'mainBot',
+        channel: 'engineering'
+      }
+    },
+    groups: {
+      "admins": ["engineering@slack"]
+    }
   }
 });
 
 app.install(slackPlugin);
+app.install(escalationPlugin);
 await app.start();
 ```
 
 ### Manual Service Creation
 
+Create the Slack service manually if you prefer more control:
+
 ```typescript
 import TokenRingApp from '@tokenring-ai/app';
-import {SlackBotService} from '@tokenring-ai/slack';
+import SlackService from '@tokenring-ai/slack/SlackService';
 import {SlackServiceConfigSchema} from '@tokenring-ai/slack/schema';
 
 const app = new TokenRingApp({});
@@ -126,10 +167,45 @@ const config = {
 };
 
 const validatedConfig = SlackServiceConfigSchema.parse(config);
-const slackService = new SlackBotService(app, validatedConfig);
+const slackService = new SlackService(app, validatedConfig);
 app.addServices(slackService);
 
 await slackService.run(signal);
+```
+
+### Escalation Provider Usage
+
+Use the escalation provider to create communication channels with users or groups:
+
+```typescript
+import {SlackEscalationProvider} from '@tokenring-ai/slack';
+import {SlackEscalationProviderConfigSchema} from '@tokenring-ai/slack/schema';
+import {EscalationService} from '@tokenring-ai/escalation';
+
+// Programmatic registration
+const escalationService = agent.requireServiceByType(EscalationService);
+escalationService.registerProvider('slackProvider', new SlackEscalationProvider(
+  SlackEscalationProviderConfigSchema.parse({
+    type: 'slack',
+    bot: 'mainBot',
+    channel: 'engineering'
+  })
+));
+
+// Use the escalation channel
+const channel = await escalationService.initiateContactWithUserOrGroup(
+  'engineering@slack',
+  'Approve production deployment?',
+  agent
+);
+
+for await (const message of channel.receive()) {
+  if (message.toLowerCase().includes('yes')) {
+    console.log('Deployment approved');
+  }
+  await channel.close();
+  break;
+}
 ```
 
 ## Direct Messaging and Escalation
@@ -139,12 +215,14 @@ The Slack service supports direct messaging with thread-based responses, enablin
 ### Communication Channel API
 
 ```typescript
-import {SlackBotService} from '@tokenring-ai/slack';
+import SlackService from '@tokenring-ai/slack';
 
-const slackService = agent.requireServiceByType(SlackBotService);
+const slackService = agent.requireServiceByType(SlackService);
+
+// Get a bot instance
+const bot = slackService.getBot('mainBot');
 
 // Create a communication channel with a channel
-const bot = slackService.getBot('mainBot');
 const channel = bot.createCommunicationChannelWithChannel('engineering');
 
 // Send a message
@@ -167,65 +245,20 @@ for await (const message of channel.receive()) {
 
 ### Escalation Provider Integration
 
-The Slack service implements the `EscalationProvider` interface from `@tokenring-ai/escalation`:
+When using the plugin, the escalation provider is automatically registered if both plugins are installed:
 
 ```typescript
-import escalationPlugin from '@tokenring-ai/escalation';
-import slackPlugin from '@tokenring-ai/slack';
-
 const app = new TokenRingApp({
+  slack: { /* bot configuration */ },
   escalation: {
     providers: {
-      slack: {
-        type: 'slack',
-        bot: 'mainBot',
-        channel: 'engineering'
-      }
-    },
-    groups: {
-      "admins": ["engineering@slack"]
-    }
-  },
-  slack: {
-    bots: {
-      "mainBot": {
-        name: "Main Bot",
-        botToken: process.env.SLACK_BOT_TOKEN!,
-        signingSecret: process.env.SLACK_SIGNING_SECRET!,
-        channels: {
-          "engineering": {
-            channelId: "C1234567890",
-            allowedUsers: [],
-            agentType: "teamLeader"
-          }
-        }
-      }
+      slack: { type: 'slack', bot: 'mainBot', channel: 'engineering' }
     }
   }
 });
 
-app.install(escalationPlugin);
-app.install(slackPlugin);
-```
-
-### Using Escalation in Agents
-
-```typescript
-const escalationService = agent.requireServiceByType(EscalationService);
-
-const channel = await escalationService.initiateContactWithUserOrGroup(
-  'engineering@slack',
-  'Approve production deployment?',
-  agent
-);
-
-for await (const message of channel.receive()) {
-  if (message.toLowerCase().includes('yes')) {
-    console.log('Deployment approved');
-  }
-  await channel.close();
-  break;
-}
+app.install(slackPlugin);  // Registers bots and automatically registers escalation provider
+app.install(escalationPlugin);  // Enables escalation service
 ```
 
 ## API Reference
@@ -233,16 +266,18 @@ for await (const message of channel.receive()) {
 ### Exports
 
 - **`default`** - Plugin object for TokenRingApp installation
-- **`SlackBotService`** - The main service class
+- **`SlackService`** - The main service class (also exported as `SlackBotService` for backwards compatibility)
 - **`SlackEscalationProvider`** - Escalation provider implementation
 - **`SlackServiceConfigSchema`** - Zod schema for configuration validation (in `@tokenring-ai/slack/schema`)
+- **`SlackBotConfigSchema`** - Zod schema for bot configuration (in `@tokenring-ai/slack/schema`)
+- **`SlackEscalationProviderConfigSchema`** - Zod schema for escalation provider (in `@tokenring-ai/slack/schema`)
 
-### SlackBotService Class
+### SlackService Class
 
 #### Constructor
 
 ```typescript
-constructor(app: TokenRingApp, config: ParsedSlackServiceConfig)
+constructor(app: TokenRingApp, options: ParsedSlackServiceConfig)
 ```
 
 #### Methods
@@ -258,6 +293,8 @@ constructor(app: TokenRingApp, config: ParsedSlackServiceConfig)
 - **`createCommunicationChannelWithChannel(channelName: string)`**: Creates a communication channel for a configured channel
 - **`createCommunicationChannelWithUser(userId: string)`**: Creates a communication channel for a specific user/channel ID
 - **`getBotUserId(): string | undefined`**: Returns the bot's user ID
+- **`start(): Promise<void>`**: Starts the Slack bot
+- **`stop(): Promise<void>`**: Stops the Slack bot
 
 ## Getting Started
 
@@ -342,6 +379,39 @@ The service handles the following agent events:
 - **Error Information**: Error messages are user-friendly without exposing internal details
 - **Resource Cleanup**: Proper cleanup prevents resource leaks
 
+## Testing
+
+The package includes comprehensive unit and integration tests:
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode
+bun test --watch
+
+# Run tests with coverage
+bun test --coverage
+```
+
+## Dependencies
+
+### Production Dependencies
+
+- `@tokenring-ai/app` (0.2.0) - TokenRing application framework
+- `@tokenring-ai/chat` (0.2.0) - Chat service integration
+- `@tokenring-ai/agent` (0.2.0) - Agent system
+- `@tokenring-ai/utility` (0.2.0) - Shared utilities
+- `@tokenring-ai/escalation` (0.2.0) - Escalation service
+- `@slack/bolt` (^4.6.0) - Slack Bolt framework
+- `@slack/web-api` (^7.14.1) - Slack Web API
+- `zod` (^4.3.6) - Schema validation
+
+### Development Dependencies
+
+- `vitest` (^4.0.18) - Testing framework
+- `typescript` (^5.9.3) - TypeScript compiler
+
 ## License
 
-MIT License - see [LICENSE](./LICENSE) file for details.
+MIT License - see LICENSE file for details.
