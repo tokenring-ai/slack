@@ -9,7 +9,7 @@
     "@tokenring-ai/utility": "0.2.0",
     "@tokenring-ai/escalation": "0.2.0",
     "@slack/bolt": "^4.6.0",
-    "@slack/web-api": "^7.13.0",
+    "@slack/web-api": "^7.14.1",
     "zod": "^4.3.6"
   },
   "exports": {
