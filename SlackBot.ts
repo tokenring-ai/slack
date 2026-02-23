@@ -5,6 +5,7 @@ import {AgentExecutionState} from "@tokenring-ai/agent/state/agentExecutionState
 import TokenRingApp from "@tokenring-ai/app";
 import type {CommunicationChannel} from "@tokenring-ai/escalation/EscalationProvider";
 import type {ParsedSlackBotConfig} from "./schema.ts";
+import type SlackService from "./SlackService.ts";
 
 type UserChannel = {
   channelId: string;
@@ -34,6 +35,7 @@ export default class SlackBot {
 
   constructor(
     private tokenRingApp: TokenRingApp,
+    private slackService: SlackService,
     private botName: string,
     private config: ParsedSlackBotConfig
   ) {}
@@ -48,13 +50,13 @@ export default class SlackBot {
 
     const authResult = await this.app.client.auth.test();
     this.botUserId = authResult.user_id;
-    this.tokenRingApp.serviceOutput(`Bot ${this.botName} (@${authResult.user}) started`);
+    this.tokenRingApp.serviceOutput(this.slackService, `Bot ${this.botName} (@${authResult.user}) started`);
 
     this.app.message(async ({message, say}) => {
       try {
         await this.handleMessage(message as any, say);
       } catch (error) {
-        this.tokenRingApp.serviceError('Error processing message:', error);
+        this.tokenRingApp.serviceError(this.slackService,'Error processing message:', error);
       }
     });
 
@@ -62,7 +64,7 @@ export default class SlackBot {
       try {
         await this.handleMessage(event as any, say);
       } catch (error) {
-        this.tokenRingApp.serviceError('Error processing mention:', error);
+        this.tokenRingApp.serviceError(this.slackService,'Error processing mention:', error);
       }
     });
 
@@ -75,7 +77,7 @@ export default class SlackBot {
           text: `🤖 Bot ${this.botName} is now online and ready!`
         });
       } catch (error) {
-        this.tokenRingApp.serviceError(`Failed to announce to channel ${channelConfig.channelId}:`, error);
+        this.tokenRingApp.serviceError(this.slackService,`Failed to announce to channel ${channelConfig.channelId}:`, error);
       }
     }
   }
@@ -102,7 +104,7 @@ export default class SlackBot {
     try {
       await this.app.stop();
     } catch (error) {
-      this.tokenRingApp.serviceError('Error stopping app:', error);
+      this.tokenRingApp.serviceError(this.slackService,'Error stopping app:', error);
     }
   }
 
@@ -250,7 +252,7 @@ export default class SlackBot {
       }
     } catch (error) {
       if (error instanceof Error && error.name !== 'AbortError') {
-        this.tokenRingApp.serviceError('Error processing message:', error);
+        this.tokenRingApp.serviceError(this.slackService,'Error processing message:', error);
       }
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -325,7 +327,7 @@ export default class SlackBot {
           this.messageIdToBotUserId.set(`${channelId}-${result.ts}`, this.botUserId!);
         }
       } catch (error) {
-        this.tokenRingApp.serviceError('Error flushing partial buffer:', error);
+        this.tokenRingApp.serviceError(this.slackService,'Error flushing partial buffer:', error);
       }
 
       buffer.text = remaining;
@@ -359,7 +361,7 @@ export default class SlackBot {
         }
       }
     } catch (error) {
-      this.tokenRingApp.serviceError('Error flushing buffer:', error);
+      this.tokenRingApp.serviceError(this.slackService,'Error flushing buffer:', error);
     }
   }
 

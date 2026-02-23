@@ -17,11 +17,12 @@ export default class SlackService implements TokenRingService {
   constructor(private app: TokenRingApp, private options: ParsedSlackServiceConfig) {}
 
   async run(signal: AbortSignal): Promise<void> {
-    this.app.serviceOutput("Starting Slack bots...");
+    this.app.serviceOutput(this, "Starting Slack bots...");
 
     for (const [botName, botConfig] of Object.entries(this.options.bots)) {
       const bot = new SlackBot(
         this.app,
+        this,
         botName,
         botConfig
       );
