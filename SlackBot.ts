@@ -95,7 +95,7 @@ export default class SlackBot {
 
     const agentManager = this.tokenRingApp.requireService(AgentManager);
     for (const agent of this.channelAgents.values()) {
-      await agentManager.deleteAgent(agent);
+      await agentManager.deleteAgent(agent.id, "Slack bot was shut down.");
     }
     this.channelAgents.clear();
 
