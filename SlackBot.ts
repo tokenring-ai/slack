@@ -1,7 +1,6 @@
 import {App} from '@slack/bolt';
 import {Agent, AgentManager} from "@tokenring-ai/agent";
 import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
-import {AgentExecutionState} from "@tokenring-ai/agent/state/agentExecutionState";
 import TokenRingApp from "@tokenring-ai/app";
 import type {CommunicationChannel} from "@tokenring-ai/escalation/EscalationProvider";
 import type {ParsedSlackBotConfig} from "./schema.ts";
@@ -212,7 +211,7 @@ export default class SlackBot {
 
   private async handleAgentMessage(channelId: string, text: string, agentType: string, say: any): Promise<void> {
     const agent = await this.getOrCreateAgentForChannel(channelId, agentType);
-    await agent.waitForState(AgentExecutionState, (state) => state.idle);
+    await agent.waitForState(AgentEventState, (state) => state.idle);
 
     let responseSent = false;
     const requestId = agent.handleInput({message: `/chat send ${text}`});
