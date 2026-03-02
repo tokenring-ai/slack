@@ -6,19 +6,24 @@ A TokenRing plugin providing Slack bot integration for AI-powered agent interact
 
 This package provides a Slack bot service that integrates with TokenRing agents, enabling natural language conversations through Slack. Each Slack channel gets its own dedicated agent instance that maintains conversation history and context. The service handles message routing, event processing, and automatic agent management. It also supports escalation workflows for agent-to-human communication.
 
+The package uses the `@slack/bolt` framework for event handling and supports both traditional RTM mode and Socket Mode for firewall-friendly connections.
+
 ## Features
 
 - **Multiple Bot Support**: Manage multiple discrete Slack bots in a single service
 - **Per-Channel Agents**: Each Slack channel gets a dedicated agent with persistent chat history
 - **Event-Driven Communication**: Handles agent events and sends responses back to Slack
-- **Direct Messaging with Threads**: Send messages to channels and await responses via Slack thread mechanism
-- **Escalation Provider**: Implements EscalationProvider interface for agent-to-human escalation workflows
+- **Thread-Based Messaging**: Send messages and await synchronous responses via Slack threads
+- **Message Buffering**: Automatic message chunking for long responses (3900 char limit) with throttling (250ms delay)
+- **Escalation Provider**: Implements `EscalationProvider` interface for agent-to-human escalation workflows
 - **Authorization**: User whitelist for restricted access control per channel
 - **Automatic Agent Management**: Creates and manages agents for each channel automatically
+- **Graceful Shutdown**: Proper cleanup of all channel agents on shutdown with message flushing
+- **Socket Mode Support**: Optional Socket Mode for firewall-friendly connections
 - **Error Handling**: Robust error handling with user-friendly error messages
-- **Timeout Management**: Configurable agent timeout handling
-- **Graceful Shutdown**: Proper cleanup of all channel agents on shutdown
-- **Plugin Integration**: Seamless integration with TokenRing plugin system
+- **Timeout Management**: Configurable agent timeout handling via `maxRunTime`
+- **Plugin Integration**: Seamless integration with TokenRing plugin system with automatic escalation provider registration
+- **Service Logging**: Uses `serviceOutput` and `serviceError` for consistent logging
 
 ## Installation
 
@@ -51,7 +56,7 @@ The package uses Zod schema validation for configuration with a nested structure
 import {z} from "zod";
 
 // Bot configuration schema
-const SlackBotConfigSchema = z.object({
+export const SlackBotConfigSchema = z.object({
   name: z.string(),
   botToken: z.string().min(1, "Bot token is required"),
   appToken: z.string().optional(),
@@ -63,8 +68,10 @@ const SlackBotConfigSchema = z.object({
   }))
 });
 
+export type ParsedSlackBotConfig = z.output<typeof SlackBotConfigSchema>;
+
 // Service configuration schema
-const SlackServiceConfigSchema = z.object({
+export const SlackServiceConfigSchema = z.object({
   bots: z.record(z.string(), SlackBotConfigSchema)
 });
 
@@ -76,7 +83,9 @@ export type ParsedSlackServiceConfig = z.output<typeof SlackServiceConfigSchema>
 The escalation provider uses a simple configuration schema:
 
 ```typescript
-const SlackEscalationProviderConfigSchema = z.object({
+import {z} from "zod";
+
+export const SlackEscalationProviderConfigSchema = z.object({
   type: z.literal('slack'),
   bot: z.string(),
   channel: z.string(),
@@ -137,6 +146,8 @@ app.install(slackPlugin);
 app.install(escalationPlugin);
 await app.start();
 ```
+
+**Note**: When both `slackPlugin` and `escalationPlugin` are installed and escalation configuration is present, the plugin automatically registers `SlackEscalationProvider` instances for each provider with `type: 'slack'`.
 
 ### Manual Service Creation
 
@@ -233,6 +244,9 @@ for await (const message of channel.receive()) {
   console.log('User responded:', message);
   break;
 }
+
+// Close the channel when done
+await channel[Symbol.asyncDispose]();
 ```
 
 ### How Thread Handling Works
@@ -245,7 +259,7 @@ for await (const message of channel.receive()) {
 
 ### Escalation Provider Integration
 
-When using the plugin, the escalation provider is automatically registered if both plugins are installed:
+When using the plugin, the escalation provider is automatically registered if both plugins are installed and escalation configuration is present:
 
 ```typescript
 const app = new TokenRingApp({
@@ -259,6 +273,25 @@ const app = new TokenRingApp({
 
 app.install(slackPlugin);  // Registers bots and automatically registers escalation provider
 app.install(escalationPlugin);  // Enables escalation service
+```
+
+## Message Buffering and Throttling
+
+The Slack bot implements message buffering and throttling to handle long responses and respect Slack's API limits:
+
+- **Maximum Message Length**: 3900 characters (Slack's limit)
+- **Throttle Delay**: 250ms between message sends
+- **Message Chunking**: Long messages are automatically split into chunks
+- **Message Update**: Subsequent chunks update the original message when possible
+- **Buffer Flushing**: All pending messages are flushed before shutdown
+
+### Example: Long Response Handling
+
+```typescript
+// When an agent produces a long response, it's automatically chunked:
+// 1. First chunk is posted as a new message
+// 2. Subsequent chunks update the same message
+// 3. If update fails (message not found), a new message is posted
 ```
 
 ## API Reference
@@ -280,21 +313,49 @@ app.install(escalationPlugin);  // Enables escalation service
 constructor(app: TokenRingApp, options: ParsedSlackServiceConfig)
 ```
 
+#### Properties
+
+- **`name`**: `"SlackService"` - Service name identifier
+- **`description`**: `"Manages multiple Slack bots for interacting with TokenRing agents."` - Service description
+
 #### Methods
 
-- **`run(signal: AbortSignal): Promise<void>`**: Starts all configured Slack bots and begins listening for messages
+- **`run(signal: AbortSignal): Promise<void>`**: Starts all configured Slack bots and begins listening for messages. Handles graceful shutdown when the signal is aborted.
 - **`getBot(botName: string): SlackBot | undefined`**: Gets a bot instance by name
 - **`getAvailableBots(): string[]`**: Returns list of configured bot names
 
 ### SlackBot Class
 
+#### Constructor
+
+```typescript
+constructor(
+  tokenRingApp: TokenRingApp,
+  slackService: SlackService,
+  botName: string,
+  config: ParsedSlackBotConfig
+)
+```
+
 #### Methods
 
-- **`createCommunicationChannelWithChannel(channelName: string)`**: Creates a communication channel for a configured channel
-- **`createCommunicationChannelWithUser(userId: string)`**: Creates a communication channel for a specific user/channel ID
+- **`start(): Promise<void>`**: Starts the Slack bot, registers event handlers, and announces to configured channels
+- **`stop(): Promise<void>`**: Stops the Slack bot, flushes pending messages, and deletes all channel agents
+- **`createCommunicationChannelWithChannel(channelName: string): CommunicationChannel`**: Creates a communication channel for a configured channel
+- **`createCommunicationChannelWithUser(userId: string): CommunicationChannel`**: Creates a communication channel for a specific user/channel ID
 - **`getBotUserId(): string | undefined`**: Returns the bot's user ID
-- **`start(): Promise<void>`**: Starts the Slack bot
-- **`stop(): Promise<void>`**: Stops the Slack bot
+
+### SlackEscalationProvider Class
+
+#### Constructor
+
+```typescript
+constructor(config: ParsedSlackEscalationProviderConfig)
+```
+
+#### Methods
+
+- **`createCommunicationChannelWithUser(channelName: string, agent: Agent): Promise<CommunicationChannel>`**: Creates a communication channel for escalation workflows
 
 ## Getting Started
 
@@ -311,6 +372,10 @@ Add these OAuth scopes under "OAuth & Permissions":
 - `app_mentions:read` - Receive @mentions
 - `channels:history` - Read channel messages
 - `channels:read` - View channel info
+- `groups:history` - Read private channel messages (for private channels)
+- `groups:read` - View private channel info (for private channels)
+- `im:history` - Read direct messages
+- `mpim:history` - Read group direct messages
 
 ### 3. Enable Socket Mode (Optional)
 
@@ -345,31 +410,52 @@ SLACK_APP_TOKEN=xapp-your-app-token  # Optional for Socket Mode
 
 The service handles the following agent events:
 
-- **`output.chat`**: Processes chat content and sends accumulated responses to Slack
-- **`output.info`**: Formats system messages with level indicators (INFO)
-- **`output.warning`**: Formats system messages with level indicators (WARNING)
-- **`output.error`**: Formats system messages with level indicators (ERROR)
-- **`input.handled`**: Handles input completion, cleans up subscriptions, and manages timeouts
+- **`output.chat`**: Processes chat content and sends accumulated responses to Slack via message buffering
+- **`output.info`**: Formats system messages with level indicators `[INFO]`
+- **`output.warning`**: Formats system messages with level indicators `[WARNING]`
+- **`output.error`**: Formats system messages with level indicators `[ERROR]`
+- **`input.handled`**: Handles input completion, cleans up subscriptions, manages timeouts, and flushes pending messages
+
+## Slack Bot Event Handlers
+
+The Slack bot registers the following event handlers:
+
+- **`message()`**: Handles all message events, including direct messages and channel messages
+- **`event('app_mention')`**: Handles @mention events in channels
+
+Both handlers:
+- Filter out bot messages
+- Validate user authorization
+- Route messages to the appropriate channel agent
+- Handle thread replies for synchronous communication
 
 ## Error Handling
 
 ### Bot-Level Errors
 
-- **Connection Errors**: Logged to console with error details
-- **Message Processing**: Wrapped in try-catch to prevent crashes
+- **Connection Errors**: Logged via `serviceError` with error details
+- **Message Processing**: Wrapped in try-catch to prevent crashes, errors logged via `serviceError`
 - **Bot Startup**: Validates configuration before initialization
 
 ### User-Level Errors
 
 - **Authorization**: Sends "Sorry, you are not authorized." for unauthorized users
-- **Timeout**: Sends "Agent timed out after {time} seconds." when agents exceed max runtime
+- **Timeout**: Agent timeout is handled via `maxRunTime` configuration, aborts agent execution
 - **No Response**: Sends "No response received from agent." when no output is generated
 
 ### Service-Level Errors
 
-- **Configuration**: Validates bot tokens and signing secrets on construction
-- **Shutdown**: Graceful cleanup with error handling for bot stop operations
-- **Resource Management**: Proper cleanup of all channel agents on service termination
+- **Configuration**: Validates bot tokens and signing secrets via Zod schema on construction
+- **Shutdown**: Graceful cleanup with error handling for bot stop operations, all pending messages are flushed
+- **Resource Management**: Proper cleanup of all channel agents on service termination via `AgentManager.deleteAgent`
+
+## Agent Lifecycle Management
+
+The Slack bot automatically manages agent lifecycle:
+
+1. **Agent Creation**: When a message is received in a channel, an agent is created if one doesn't exist
+2. **Agent Reuse**: Existing agents are reused for subsequent messages in the same channel
+3. **Agent Deletion**: When the bot stops, all channel agents are deleted via `AgentManager.deleteAgent` with reason "Slack bot was shut down."
 
 ## Security Considerations
 
@@ -378,6 +464,7 @@ The service handles the following agent events:
 - **Input Validation**: All user input is validated and sanitized
 - **Error Information**: Error messages are user-friendly without exposing internal details
 - **Resource Cleanup**: Proper cleanup prevents resource leaks
+- **Thread Safety**: Message IDs are tracked to ensure thread replies are routed correctly
 
 ## Testing
 

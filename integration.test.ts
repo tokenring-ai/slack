@@ -40,7 +40,7 @@ describe('Slack Integration Tests', () => {
     appToken: 'xapp-test-token',
     channelId: 'C1234567890',
     authorizedUserIds: ['U06T1LWJG', 'UABCDEF123'],
-    defaultAgentType: 'teamLeader'
+    defaultAgentType: 'leader'
   };
 
   beforeEach(() => {
