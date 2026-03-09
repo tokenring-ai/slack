@@ -5,11 +5,15 @@ export const SlackBotConfigSchema = z.object({
   botToken: z.string().min(1, "Bot token is required"),
   appToken: z.string().optional(),
   signingSecret: z.string().min(1, "Signing secret is required"),
+  joinMessage: z.string().optional(),
+  maxFileSize: z.number().default(20_971_520), // 20MB default
   channels: z.record(z.string(), z.object({
     channelId: z.string(),
     allowedUsers: z.array(z.string()).default([]),
     agentType: z.string(),
-  }))
+  })),
+  dmAgentType: z.string().optional(),
+  dmAllowedUsers: z.array(z.string()).default([]),
 });
 
 export type ParsedSlackBotConfig = z.output<typeof SlackBotConfigSchema>;
