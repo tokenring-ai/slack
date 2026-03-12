@@ -293,6 +293,7 @@ export default class SlackBot {
         });
 
         attachments.push({
+          type: "attachment",
           name: file.name || `slack_file_${file.id ?? Date.now()}`,
           mimeType: file.mimetype || "application/octet-stream",
           body: Buffer.from(data as ArrayBuffer).toString("base64"),
@@ -346,7 +347,7 @@ export default class SlackBot {
               this.handleChatOutput(channelId, `\n[${event.type.split(".")[1].toUpperCase()}]: ${event.message}\n`);
               break;
             }
-            case 'input.handled': {
+            case 'agent.response': {
               const request = this.activeRequests.get(event.requestId);
               if (request) {
                 const response = this.chatResponses.get(request.channelId);
