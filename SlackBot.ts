@@ -230,6 +230,7 @@ export default class SlackBot {
 
       this.chatResponses.set(channelId, {text: null, messageTimestamps: [], sentTexts: []});
       const requestId = agent.handleInput({
+        from: `Slack DM from ${userId}`,
         message: `/chat send From: <@${userId}> ${text || "No text sent"}`,
         attachments,
       });
@@ -260,6 +261,7 @@ export default class SlackBot {
     this.chatResponses.set(channelId, {text: null, messageTimestamps: [], sentTexts: []});
 
     const requestId = agent.handleInput({
+      from: `Slack channel message from ${userId}`,
       message: `/chat send From: <@${userId}> ${cleanText || "No text sent"}`,
       attachments,
     });
