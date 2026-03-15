@@ -477,7 +477,7 @@ pkg/slack/
 | `@tokenring-ai/utility` | 0.2.0 | Shared utilities |
 | `@tokenring-ai/escalation` | 0.2.0 | Escalation service |
 | `@slack/bolt` | ^4.6.0 | Slack Bolt framework |
-| `@slack/web-api` | ^7.14.1 | Slack Web API |
+| `@slack/web-api` | ^7.15.0 | Slack Web API |
 | `axios` | ^1.13.6 | HTTP client for file downloads |
 | `zod` | ^4.3.6 | Schema validation |
 
@@ -485,7 +485,7 @@ pkg/slack/
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `vitest` | ^4.0.18 | Testing framework |
+| `vitest` | ^4.1.0 | Testing framework |
 | `typescript` | ^5.9.3 | TypeScript compiler |
 
 ## Related Components
