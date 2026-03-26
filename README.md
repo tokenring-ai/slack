@@ -29,31 +29,36 @@ The package uses the `@slack/bolt` framework for event handling and supports Soc
 ## Installation
 
 ```bash
-bun install @tokenring-ai/slack
+bun add @tokenring-ai/slack
 ```
 
 ## Core Components/API
 
 ### Exports
 
-- **`SlackBotService`** (default export alias) - The main service class
-- **`SlackEscalationProvider`** - Escalation provider implementation
-- **`SlackServiceConfigSchema`** - Zod schema for configuration validation
-- **`SlackBotConfigSchema`** - Zod schema for bot configuration
-- **`SlackEscalationProviderConfigSchema`** - Zod schema for escalation provider
+- **`SlackBotService`** (default export alias from `./SlackService`) - The main service class
+- **`SlackEscalationProvider`** (from `./SlackEscalationProvider`) - Escalation provider implementation
+- **`SlackServiceConfigSchema`** (from `./schema`) - Zod schema for service configuration validation
+- **`SlackBotConfigSchema`** (from `./schema`) - Zod schema for bot configuration
+- **`SlackEscalationProviderConfigSchema`** (from `./schema`) - Zod schema for escalation provider configuration
 
 ### SlackService Class
 
 The main service class that manages multiple Slack bots.
+
+**Note**: The class is exported as `SlackBotService` in `index.ts` for backward compatibility, but the actual class name is `SlackService`.
 
 #### Properties
 
 - **`name`**: `"SlackService"` - Service name identifier
 - **`description`**: `"Manages multiple Slack bots for interacting with TokenRing agents."` - Service description
 
-#### Methods
+#### Constructor
 
 - **`constructor(app: TokenRingApp, options: ParsedSlackServiceConfig)`**: Creates a new Slack service instance
+
+#### Methods
+
 - **`run(signal: AbortSignal): Promise<void>`**: Starts all configured Slack bots and begins listening for messages. Handles graceful shutdown when the signal is aborted.
 - **`getBot(botName: string): SlackBot | undefined`**: Gets a bot instance by name
 - **`getAvailableBots(): string[]`**: Returns list of configured bot names
@@ -103,6 +108,7 @@ import TokenRingApp from '@tokenring-ai/app';
 import slackPlugin from '@tokenring-ai/slack';
 import escalationPlugin from '@tokenring-ai/escalation';
 
+// Configure the app with Slack and Escalation settings
 const app = new TokenRingApp({
   slack: {
     bots: {
@@ -144,12 +150,13 @@ const app = new TokenRingApp({
   }
 });
 
+// Install plugins - order matters for escalation provider registration
 app.install(slackPlugin);
 app.install(escalationPlugin);
 await app.start();
 ```
 
-**Note**: When both `slackPlugin` and `escalationPlugin` are installed and escalation configuration is present, the plugin automatically registers `SlackEscalationProvider` instances for each provider with `type: 'slack'`.
+**Note**: When both `slackPlugin` and `escalationPlugin` are installed and escalation configuration is present, the plugin automatically registers `SlackEscalationProvider` instances for each provider with `type: 'slack'` to the `EscalationService`.
 
 ### Manual Service Creation
 
@@ -162,6 +169,7 @@ import {SlackServiceConfigSchema} from '@tokenring-ai/slack/schema';
 
 const app = new TokenRingApp({});
 
+// Define and validate configuration
 const config = {
   bots: {
     "mainBot": {
@@ -183,6 +191,7 @@ const validatedConfig = SlackServiceConfigSchema.parse(config);
 const slackService = new SlackService(app, validatedConfig);
 app.addServices(slackService);
 
+// Start the service with an abort signal
 await slackService.run(signal);
 ```
 
@@ -195,7 +204,7 @@ import {SlackEscalationProvider} from '@tokenring-ai/slack';
 import {SlackEscalationProviderConfigSchema} from '@tokenring-ai/slack/schema';
 import {EscalationService} from '@tokenring-ai/escalation';
 
-// Programmatic registration
+// Programmatic registration (alternative to plugin-based registration)
 const escalationService = agent.requireServiceByType(EscalationService);
 escalationService.registerProvider('slackProvider', new SlackEscalationProvider(
   SlackEscalationProviderConfigSchema.parse({
@@ -212,6 +221,7 @@ const channel = await escalationService.initiateContactWithUserOrGroup(
   agent
 );
 
+// Listen for responses
 for await (const message of channel.receive()) {
   if (message.toLowerCase().includes('yes')) {
     console.log('Deployment approved');
@@ -251,7 +261,7 @@ await channel[Symbol.asyncDispose]();
 
 ## Configuration
 
-The package uses Zod schema validation for configuration with a nested structure for multiple bots.
+The package uses Zod schema validation for configuration with a nested structure for multiple bots. Schemas are exported from `./schema`.
 
 ### SlackBotConfigSchema
 
@@ -276,6 +286,8 @@ export const SlackBotConfigSchema = z.object({
 
 export type ParsedSlackBotConfig = z.output<typeof SlackBotConfigSchema>;
 ```
+
+**Note**: The `channels` record can be empty, but each channel entry requires `channelId` and `agentType`.
 
 **Bot Configuration Options:**
 
@@ -341,7 +353,7 @@ export type ParsedSlackEscalationProviderConfig = z.output<typeof SlackEscalatio
 
 ### Plugin Registration
 
-The plugin automatically registers services and escalation providers when installed:
+The plugin automatically registers services and escalation providers when installed with configuration:
 
 ```typescript
 import TokenRingApp from '@tokenring-ai/app';
@@ -373,8 +385,8 @@ await app.start();
 
 Services are automatically registered when the plugin is installed with configuration:
 
-1. `SlackService` is registered with the application
-2. If escalation configuration is present, `SlackEscalationProvider` instances are automatically registered with the `EscalationService`
+1. `SlackService` is registered with the application via `app.addServices()`
+2. If escalation configuration is present and `escalationPlugin` is also installed, `SlackEscalationProvider` instances are automatically registered with the `EscalationService`
 
 ### Escalation Service Integration
 
@@ -385,12 +397,32 @@ import {EscalationService} from '@tokenring-ai/escalation';
 
 const escalationService = app.requireServiceByType(EscalationService);
 
-// The provider is automatically registered if both plugins are installed
+// The provider is automatically registered if both slackPlugin and escalationPlugin are installed
+// with appropriate escalation configuration
 const channel = await escalationService.initiateContactWithUserOrGroup(
   'group-name',
   'Message for escalation',
   agent
 );
+```
+
+### Manual Escalation Provider Registration
+
+If you prefer manual registration, you can register the escalation provider directly:
+
+```typescript
+import {EscalationService} from '@tokenring-ai/escalation';
+import {SlackEscalationProvider} from '@tokenring-ai/slack';
+import {SlackEscalationProviderConfigSchema} from '@tokenring-ai/slack/schema';
+
+const escalationService = app.requireServiceByType(EscalationService);
+escalationService.registerProvider('slackProvider', new SlackEscalationProvider(
+  SlackEscalationProviderConfigSchema.parse({
+    type: 'slack',
+    bot: 'mainBot',
+    channel: 'engineering'
+  })
+));
 ```
 
 ## RPC Endpoints
@@ -434,7 +466,7 @@ This package does not define chat commands. Commands are handled by the agent sy
 
 ## Testing and Development
 
-The package includes comprehensive integration tests:
+The package includes comprehensive integration tests using vitest:
 
 ```bash
 # Run all tests
@@ -454,14 +486,14 @@ bun run build
 
 ```
 pkg/slack/
-├── index.ts                    # Main exports
-├── plugin.ts                   # TokenRing plugin definition
-├── schema.ts                   # Zod configuration schemas
-├── SlackService.ts             # Main service class
-├── SlackBot.ts                 # Bot implementation
-├── SlackEscalationProvider.ts  # Escalation provider
-├── splitIntoChunks.ts          # Message chunking utility
-├── integration.test.ts         # Integration tests
+├── index.ts                    # Main exports (SlackBotService, SlackEscalationProvider)
+├── plugin.ts                   # TokenRing plugin definition with auto-registration
+├── schema.ts                   # Zod configuration schemas for service, bot, and escalation provider
+├── SlackService.ts             # Main service class managing multiple Slack bots
+├── SlackBot.ts                 # Bot implementation with message handling and agent management
+├── SlackEscalationProvider.ts  # Escalation provider implementation
+├── splitIntoChunks.ts          # Message chunking utility for Slack's 3900 char limit
+├── integration.test.ts         # Integration tests with mocked Slack Bolt
 ├── vitest.config.ts           # Test configuration
 └── package.json               # Package metadata and dependencies
 ```
@@ -473,6 +505,7 @@ pkg/slack/
 | Package | Version | Purpose |
 |---------|---------|---------|
 | `@tokenring-ai/app` | 0.2.0 | TokenRing application framework |
+| `@tokenring-ai/chat` | 0.2.0 | Chat functionality |
 | `@tokenring-ai/agent` | 0.2.0 | Agent system |
 | `@tokenring-ai/utility` | 0.2.0 | Shared utilities |
 | `@tokenring-ai/escalation` | 0.2.0 | Escalation service |
@@ -485,8 +518,8 @@ pkg/slack/
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `vitest` | ^4.1.0 | Testing framework |
-| `typescript` | ^5.9.3 | TypeScript compiler |
+| `vitest` | ^4.1.1 | Testing framework |
+| `typescript` | ^6.0.2 | TypeScript compiler |
 
 ## Related Components
 

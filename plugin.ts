@@ -3,7 +3,7 @@ import {EscalationService} from "@tokenring-ai/escalation";
 import {EscalationServiceConfigSchema} from "@tokenring-ai/escalation/schema";
 import {z} from "zod";
 import {SlackEscalationProvider} from "./index.ts";
-import packageJSON from './package.json' with {type: 'json'};
+import packageJSON from "./package.json" with {type: "json"};
 import {SlackEscalationProviderConfigSchema, SlackServiceConfigSchema} from "./schema.ts";
 import SlackService from "./SlackService.ts";
 
@@ -22,11 +22,11 @@ export default {
       if (config.escalation) {
         app.waitForService(EscalationService, escalationService => {
           for (const [providerName, provider] of Object.entries(config.escalation!.providers)) {
-            if (provider.type === 'slack') {
+            if (provider.type === "slack") {
               escalationService.registerProvider(providerName, new SlackEscalationProvider(SlackEscalationProviderConfigSchema.parse(provider)));
             }
           }
-        })
+        });
       }
     }
   },
