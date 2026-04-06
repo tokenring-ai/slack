@@ -1,6 +1,6 @@
 {
   "name": "@tokenring-ai/slack",
-  "description": "A Token Ring plugin providing Slack integration.",
+  "description": "Bot integration for interacting with agents through Slack.",
   "version": "0.2.0",
   "dependencies": {
     "@tokenring-ai/app": "0.2.0",
