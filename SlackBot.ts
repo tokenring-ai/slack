@@ -27,7 +27,7 @@ type ChatResponse = {
 export default class SlackBot {
   private app!: App;
   private botUserId?: string;
-  private channelAgents = new Map<string, Promise<Agent>>();
+  private channelAgents = new Map<string, Agent>();
   private userChannels = new Map<string, UserChannel>();
   private chatResponses = new Map<string, ChatResponse>();
   private lastSendTime = 0;
@@ -311,8 +311,8 @@ export default class SlackBot {
   private async ensureAgentForChannel(channelId: string, agentType: string): Promise<Agent> {
     if (!this.channelAgents.has(channelId)) {
       const agentManager = this.tokenRingApp.requireService(AgentManager);
-      const agentPromise = agentManager.spawnAgent({agentType, headless: true});
-      this.channelAgents.set(channelId, agentPromise);
+      const agent = agentManager.spawnAgent({agentType, headless: true});
+      this.channelAgents.set(channelId, agent);
     }
 
     const agent = await this.channelAgents.get(channelId)!;
