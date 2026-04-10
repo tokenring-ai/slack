@@ -1,11 +1,16 @@
-import {Agent} from "@tokenring-ai/agent";
-import type {CommunicationChannel, EscalationProvider} from "@tokenring-ai/escalation/EscalationProvider";
+import type {Agent} from "@tokenring-ai/agent";
+import type {CommunicationChannel, EscalationProvider,} from "@tokenring-ai/escalation/EscalationProvider";
 import type {ParsedSlackEscalationProviderConfig} from "./schema.ts";
 import SlackService from "./SlackService.ts";
 
 export default class SlackEscalationProvider implements EscalationProvider {
-  constructor(readonly config: ParsedSlackEscalationProviderConfig) {}
-  async createCommunicationChannelWithUser(channelName: string, agent: Agent): Promise<CommunicationChannel> {
+  constructor(readonly config: ParsedSlackEscalationProviderConfig) {
+  }
+
+  createCommunicationChannelWithUser(
+    channelName: string,
+    agent: Agent,
+  ): CommunicationChannel {
     const slackService = agent.requireServiceByType(SlackService);
 
     const bot = slackService.getBot(this.config.bot);

@@ -1,9 +1,9 @@
-import {TokenRingPlugin} from "@tokenring-ai/app";
+import type {TokenRingPlugin} from "@tokenring-ai/app";
 import {EscalationService} from "@tokenring-ai/escalation";
 import {z} from "zod";
 import {SlackEscalationProvider} from "./index.ts";
 import packageJSON from "./package.json" with {type: "json"};
-import {type ParsedSlackBotConfig, SlackServiceConfigSchema} from "./schema.ts";
+import {type ParsedSlackBotConfig, SlackServiceConfigSchema,} from "./schema.ts";
 import SlackService from "./SlackService.ts";
 
 const packageConfigSchema = z.object({
@@ -17,14 +17,17 @@ function addBotsFromEnv(bots: Record<string, Partial<ParsedSlackBotConfig>>) {
     const n = match[1];
     const signingSecret = process.env[`SLACK_SIGNING_SECRET${n}`];
     if (!signingSecret) continue;
-    const name = process.env[`SLACK_BOT_NAME${n}`] ?? `Slack Bot${n ? ` ${n}` : ""}`;
+    const name =
+      process.env[`SLACK_BOT_NAME${n}`] ?? `Slack Bot${n ? ` ${n}` : ""}`;
+    const escalationChannel = process.env[`SLACK_ESCALATION_CHANNEL${n}`];
+
     bots[name] = {
       name,
       botToken: value,
       signingSecret,
       appToken: process.env[`SLACK_APP_TOKEN${n}`],
-      escalation: process.env[`SLACK_ESCALATION_CHANNEL${n}`]
-        ? {channel: process.env[`SLACK_ESCALATION_CHANNEL${n}`]!}
+      escalation: escalationChannel
+        ? {channel: escalationChannel}
         : undefined,
       channels: {},
     };
@@ -40,12 +43,21 @@ export default {
     addBotsFromEnv(config.slack.bots);
     if (Object.keys(config.slack.bots).length === 0) return;
 
-    app.addServices(new SlackService(app, SlackServiceConfigSchema.parse(config.slack)));
+    app.addServices(
+      new SlackService(app, SlackServiceConfigSchema.parse(config.slack)),
+    );
 
-    app.waitForService(EscalationService, escalationService => {
+    app.waitForService(EscalationService, (escalationService) => {
       for (const [botName, bot] of Object.entries(config.slack.bots)) {
         if (bot.escalation) {
-          escalationService.registerProvider(botName, new SlackEscalationProvider({type: "slack", bot: botName, channel: bot.escalation.channel}));
+          escalationService.registerProvider(
+            botName,
+            new SlackEscalationProvider({
+              type: "slack",
+              bot: botName,
+              channel: bot.escalation.channel,
+            }),
+          );
         }
       }
     });
