@@ -4,7 +4,6 @@ import type {InputAttachment} from "@tokenring-ai/agent/AgentEvents";
 import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
 import type {CommunicationChannel} from "@tokenring-ai/escalation/EscalationProvider";
-import axios from "axios";
 import type {ParsedSlackBotConfig} from "./schema.ts";
 import type SlackService from "./SlackService.ts";
 import {splitIntoChunks} from "./splitIntoChunks.ts";
@@ -338,12 +337,17 @@ export default class SlackBot {
       if (!fileUrl) continue;
 
       try {
-        const {data} = await axios.get(fileUrl, {
-          responseType: "arraybuffer",
+        const response = await fetch(fileUrl, {
           headers: {
             Authorization: `Bearer ${this.config.botToken}`,
           },
         });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file: ${response.statusText}`);
+        }
+
+        const data = await response.arrayBuffer();
 
         attachments.push({
           type: "attachment",

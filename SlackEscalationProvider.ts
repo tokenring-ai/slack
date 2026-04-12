@@ -1,5 +1,5 @@
 import type {Agent} from "@tokenring-ai/agent";
-import type {CommunicationChannel, EscalationProvider,} from "@tokenring-ai/escalation/EscalationProvider";
+import type {CommunicationChannel, EscalationProvider} from "@tokenring-ai/escalation/EscalationProvider";
 import type {ParsedSlackEscalationProviderConfig} from "./schema.ts";
 import SlackService from "./SlackService.ts";
 

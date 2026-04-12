@@ -538,6 +538,7 @@ pkg/slack/
 ### 2. Configure Bot Permissions
 
 Add these OAuth scopes under "OAuth & Permissions":
+
 - `chat:write` - Send messages
 - `app_mentions:read` - Receive @mentions
 - `channels:history` - Read channel messages
@@ -596,6 +597,7 @@ The Slack bot registers the following event handlers:
 - **`event('app_mention')`**: Handles @mention events in channels
 
 Both handlers:
+
 - Filter out bot messages
 - Validate user authorization
 - Route messages to the appropriate channel agent

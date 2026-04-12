@@ -3,7 +3,7 @@ import {EscalationService} from "@tokenring-ai/escalation";
 import {z} from "zod";
 import {SlackEscalationProvider} from "./index.ts";
 import packageJSON from "./package.json" with {type: "json"};
-import {type ParsedSlackBotConfig, SlackServiceConfigSchema,} from "./schema.ts";
+import {type ParsedSlackBotConfig, SlackServiceConfigSchema} from "./schema.ts";
 import SlackService from "./SlackService.ts";
 
 const packageConfigSchema = z.object({
