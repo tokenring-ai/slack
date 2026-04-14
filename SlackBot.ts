@@ -66,7 +66,7 @@ export default class SlackBot {
     this.app.message(async ({message, say}) => {
       try {
         await this.handleMessage(message as any, say);
-      } catch (error) {
+      } catch (error: unknown) {
         this.tokenRingApp.serviceError(
           this.slackService,
           "Error processing message:",
@@ -78,7 +78,7 @@ export default class SlackBot {
     this.app.event("app_mention", async ({event, say}) => {
       try {
         await this.handleMessage(event as any, say);
-      } catch (error) {
+      } catch (error: unknown) {
         this.tokenRingApp.serviceError(
           this.slackService,
           "Error processing mention:",
@@ -96,7 +96,7 @@ export default class SlackBot {
             channel: channelConfig.channelId,
             text: this.config.joinMessage,
           });
-        } catch (error) {
+        } catch (error: unknown) {
           this.tokenRingApp.serviceError(
             this.slackService,
             `Failed to announce to channel ${channelConfig.channelId}:`,
@@ -123,15 +123,14 @@ export default class SlackBot {
     this.activeRequests.clear();
 
     const agentManager = this.tokenRingApp.requireService(AgentManager);
-    for (const agentPromise of this.channelAgents.values()) {
-      const agent = await agentPromise;
-      await agentManager.deleteAgent(agent.id, "Slack bot was shut down.");
+    for (const agent of this.channelAgents.values()) {
+      agentManager.deleteAgent(agent.id, "Slack bot was shut down.");
     }
     this.channelAgents.clear();
 
     try {
       await this.app.stop();
-    } catch (error) {
+    } catch (error: unknown) {
       this.tokenRingApp.serviceError(
         this.slackService,
         "Error stopping app:",
@@ -255,7 +254,7 @@ export default class SlackBot {
       const attachments = await this.extractAllAttachments(msg);
       if (!text.trim() && attachments.length === 0) return;
 
-      const agent = await this.ensureAgentForChannel(
+      const agent = this.ensureAgentForChannel(
         userId,
         this.config.dmAgentType,
       );
@@ -297,7 +296,7 @@ export default class SlackBot {
     const attachments = await this.extractAllAttachments(msg);
     if (!cleanText && attachments.length === 0) return;
 
-    const agent = await this.ensureAgentForChannel(
+    const agent = this.ensureAgentForChannel(
       channelId,
       channelConfig.agentType,
     );
@@ -357,7 +356,7 @@ export default class SlackBot {
           encoding: "base64",
           timestamp: Date.now(),
         });
-      } catch (error) {
+      } catch (error: unknown) {
         this.tokenRingApp.serviceError(
           this.slackService,
           `Failed to fetch Slack file ${file.id ?? file.name ?? "unknown"}:`,
@@ -369,17 +368,17 @@ export default class SlackBot {
     return attachments;
   }
 
-  private async ensureAgentForChannel(
+  private ensureAgentForChannel(
     channelId: string,
     agentType: string,
-  ): Promise<Agent> {
+  ): Agent {
     if (!this.channelAgents.has(channelId)) {
       const agentManager = this.tokenRingApp.requireService(AgentManager);
       const agent = agentManager.spawnAgent({agentType, headless: true});
       this.channelAgents.set(channelId, agent);
     }
 
-    const agent = await this.channelAgents.get(channelId)!;
+    const agent = this.channelAgents.get(channelId)!;
 
     if (!this.channelListeners.has(channelId)) {
       this.channelListeners.add(channelId);
@@ -447,7 +446,7 @@ export default class SlackBot {
           }
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
         this.tokenRingApp.serviceError(
           this.slackService,
@@ -527,7 +526,7 @@ export default class SlackBot {
           response.messageTimestamps[i] = postedTs;
         }
         response.sentTexts[i] = chunk;
-      } catch (error) {
+      } catch (error: unknown) {
         hadErrors = true;
         this.tokenRingApp.serviceError(
           this.slackService,
@@ -574,7 +573,7 @@ export default class SlackBot {
         text,
       });
       return timestamp;
-    } catch (error) {
+    } catch (error: unknown) {
       if (!this.isMessageNotFoundError(error)) throw error;
       return this.sendMessage(channelId, text);
     }
