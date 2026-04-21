@@ -25,7 +25,7 @@ export function splitIntoChunks(text: string | null): string[] {
   if (current) chunks.push(current);
 
   // Force-split any chunk that still exceeds MAX.
-  return chunks.flatMap((chunk) => {
+  return chunks.flatMap(chunk => {
     const parts: string[] = [];
     while (chunk.length > MAX) {
       parts.push(chunk.substring(0, MAX));

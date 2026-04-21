@@ -1,24 +1,25 @@
-import {App, type KnownEventFromType, type SayFn} from "@slack/bolt";
-import {type Agent, AgentManager} from "@tokenring-ai/agent";
-import {BaseAttachmentSchema, type InputAttachment} from "@tokenring-ai/agent/AgentEvents";
-import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
+import { App, type KnownEventFromType, type SayFn } from "@slack/bolt";
+import { type Agent, AgentManager } from "@tokenring-ai/agent";
+import { BaseAttachmentSchema, type InputAttachment } from "@tokenring-ai/agent/AgentEvents";
+import { AgentEventState } from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
-import type {CommunicationChannel} from "@tokenring-ai/escalation/EscalationProvider";
-import type {ParsedSlackBotConfig} from "./schema.ts";
+import type { CommunicationChannel } from "@tokenring-ai/escalation/EscalationProvider";
+import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
 import type SlackService from "./SlackService.ts";
-import {splitIntoChunks} from "./splitIntoChunks.ts";
+import type { ParsedSlackBotConfig } from "./schema.ts";
+import { splitIntoChunks } from "./splitIntoChunks.ts";
 
 type UserChannel = {
   channelId: string;
   trackedMessageIds: Set<string>;
   queue: string[];
-  resolve?: (value: IteratorResult<string>) => void;
+  resolve?: undefined | ((value: IteratorResult<string>) => void);
   closed: boolean;
 };
 
 type ChatResponse = {
   text: string | null;
-  messageTimestamps: (string | undefined)[];
+  messageTimestamps: string[];
   sentTexts: string[];
   isComplete?: boolean;
 };
@@ -34,7 +35,7 @@ type SlackInboundMessage =
 
 export default class SlackBot {
   private app!: App;
-  private botUserId?: string;
+  private botUserId?: string | undefined;
   private channelAgents = new Map<string, Agent>();
   private userChannels = new Map<string, UserChannel>();
   private chatResponses = new Map<string, ChatResponse>();
@@ -43,10 +44,7 @@ export default class SlackBot {
   private pendingChannelIds = new Set<string>();
   private isProcessing = false;
   private messageIdToBotUserId = new Map<string, string>();
-  private activeRequests = new Map<
-    string,
-    { channelId: string; responseSent: boolean }
-  >();
+  private activeRequests = new Map<string, { channelId: string; responseSent: boolean }>();
   private channelListeners = new Set<string>();
 
   constructor(
@@ -54,45 +52,35 @@ export default class SlackBot {
     private slackService: SlackService,
     private botName: string,
     private config: ParsedSlackBotConfig,
-  ) {
-  }
+  ) {}
 
   async start(): Promise<void> {
-    this.app = new App({
-      token: this.config.botToken,
-      signingSecret: this.config.signingSecret,
-      socketMode: !!this.config.appToken,
-      appToken: this.config.appToken,
-    });
+    this.app = new App(
+      stripUndefinedKeys({
+        token: this.config.botToken,
+        signingSecret: this.config.signingSecret,
+        socketMode: !!this.config.appToken,
+        appToken: this.config.appToken,
+      }),
+    );
 
     const authResult = await this.app.client.auth.test();
     this.botUserId = authResult.user_id;
-    this.tokenRingApp.serviceOutput(
-      this.slackService,
-      `Bot ${this.botName} (@${authResult.user}) started`,
-    );
+    this.tokenRingApp.serviceOutput(this.slackService, `Bot ${this.botName} (@${authResult.user}) started`);
 
-    this.app.message(async ({message, say}) => {
+    this.app.message(async ({ message, say }) => {
       try {
         await this.handleMessage(message, say);
       } catch (error: unknown) {
-        this.tokenRingApp.serviceError(
-          this.slackService,
-          "Error processing message:",
-          error,
-        );
+        this.tokenRingApp.serviceError(this.slackService, "Error processing message:", error);
       }
     });
 
-    this.app.event("app_mention", async ({event, say}) => {
+    this.app.event("app_mention", async ({ event, say }) => {
       try {
         await this.handleMessage(event, say);
       } catch (error: unknown) {
-        this.tokenRingApp.serviceError(
-          this.slackService,
-          "Error processing mention:",
-          error,
-        );
+        this.tokenRingApp.serviceError(this.slackService, "Error processing mention:", error);
       }
     });
 
@@ -106,11 +94,7 @@ export default class SlackBot {
             text: this.config.joinMessage,
           });
         } catch (error: unknown) {
-          this.tokenRingApp.serviceError(
-            this.slackService,
-            `Failed to announce to channel ${channelConfig.channelId}:`,
-            error,
-          );
+          this.tokenRingApp.serviceError(this.slackService, `Failed to announce to channel ${channelConfig.channelId}:`, error);
         }
       }
     }
@@ -140,17 +124,11 @@ export default class SlackBot {
     try {
       await this.app.stop();
     } catch (error: unknown) {
-      this.tokenRingApp.serviceError(
-        this.slackService,
-        "Error stopping app:",
-        error,
-      );
+      this.tokenRingApp.serviceError(this.slackService, "Error stopping app:", error);
     }
   }
 
-  createCommunicationChannelWithChannel(
-    channelName: string,
-  ): CommunicationChannel {
+  createCommunicationChannelWithChannel(channelName: string): CommunicationChannel {
     const channelConfig = this.config.channels[channelName];
     if (!channelConfig) {
       throw new Error(`Channel "${channelName}" not found in configuration.`);
@@ -176,9 +154,7 @@ export default class SlackBot {
           text: message,
         });
         if (!result.channel || !result.ts) {
-          throw new Error(
-            `Slack did not return message id fields for outbound message in channel ${channelId}.`,
-          );
+          throw new Error(`Slack did not return message id fields for outbound message in channel ${channelId}.`);
         }
         const messageId = `${result.channel}-${result.ts}`;
         trackedMessageIds.add(messageId);
@@ -190,7 +166,7 @@ export default class SlackBot {
           if (channel.queue.length > 0) {
             yield channel.queue.shift()!;
           } else {
-            await new Promise<IteratorResult<string>>((resolve) => {
+            await new Promise<IteratorResult<string>>(resolve => {
               channel.resolve = resolve;
             });
           }
@@ -199,7 +175,7 @@ export default class SlackBot {
       [Symbol.dispose]: () => {
         channel.closed = true;
         if (channel.resolve) {
-          channel.resolve({value: undefined, done: true});
+          channel.resolve({ value: undefined, done: true });
           channel.resolve = undefined;
         }
         for (const msgId of trackedMessageIds) {
@@ -211,9 +187,7 @@ export default class SlackBot {
     };
   }
 
-  private isInboundMessage(
-    msg: SlackMessageEvent | SlackAppMentionEvent,
-  ): msg is SlackInboundMessage {
+  private isInboundMessage(msg: SlackMessageEvent | SlackAppMentionEvent): msg is SlackInboundMessage {
     return (
       msg.type === "app_mention" ||
       msg.subtype === undefined ||
@@ -223,10 +197,7 @@ export default class SlackBot {
     );
   }
 
-  private async handleMessage(
-    msg: SlackMessageEvent | SlackAppMentionEvent,
-    say: SayFn,
-  ): Promise<void> {
+  private async handleMessage(msg: SlackMessageEvent | SlackAppMentionEvent, say: SayFn): Promise<void> {
     if (!this.isInboundMessage(msg)) return;
 
     const userId = msg.user;
@@ -250,7 +221,7 @@ export default class SlackBot {
         this.messageIdToBotUserId.set(messageId, this.botUserId!);
 
         if (text && channel.resolve) {
-          channel.resolve({value: text, done: false});
+          channel.resolve({ value: text, done: false });
           channel.resolve = undefined;
         } else if (text) {
           channel.queue.push(text);
@@ -268,10 +239,7 @@ export default class SlackBot {
         return;
       }
 
-      if (
-        this.config.dmAllowedUsers.length > 0 &&
-        !this.config.dmAllowedUsers.includes(userId)
-      ) {
+      if (this.config.dmAllowedUsers.length > 0 && !this.config.dmAllowedUsers.includes(userId)) {
         await say("Sorry, you are not authorized to DM this bot.");
         return;
       }
@@ -279,11 +247,8 @@ export default class SlackBot {
       const attachments = await this.extractAllAttachments(msg);
       if (!text.trim() && attachments.length === 0) return;
 
-      const agent = this.ensureAgentForChannel(
-        userId,
-        this.config.dmAgentType,
-      );
-      await agent.waitForState(AgentEventState, (state) => state.idle);
+      const agent = this.ensureAgentForChannel(userId, this.config.dmAgentType);
+      await agent.waitForState(AgentEventState, state => state.idle);
 
       this.chatResponses.set(channelId, {
         text: null,
@@ -295,23 +260,18 @@ export default class SlackBot {
         message: `/chat send From: <@${userId}> ${text || "No text sent"}`,
         attachments,
       });
-      this.activeRequests.set(requestId, {channelId, responseSent: false});
+      this.activeRequests.set(requestId, { channelId, responseSent: false });
 
       await this.flushBuffer(channelId);
       return;
     }
 
     // Check if configured channel message with bot mention.
-    const channelConfig = Object.values(this.config.channels).find(
-      (c) => c.channelId === channelId,
-    );
+    const channelConfig = Object.values(this.config.channels).find(c => c.channelId === channelId);
     if (!channelConfig) return;
     if (!text.includes(`<@${this.botUserId}>`)) return;
 
-    if (
-      channelConfig.allowedUsers.length > 0 &&
-      !channelConfig.allowedUsers.includes(userId)
-    ) {
+    if (channelConfig.allowedUsers.length > 0 && !channelConfig.allowedUsers.includes(userId)) {
       await say("Sorry, you are not authorized.");
       return;
     }
@@ -321,11 +281,8 @@ export default class SlackBot {
     const attachments = await this.extractAllAttachments(msg);
     if (!cleanText && attachments.length === 0) return;
 
-    const agent = this.ensureAgentForChannel(
-      channelId,
-      channelConfig.agentType,
-    );
-    await agent.waitForState(AgentEventState, (state) => state.idle);
+    const agent = this.ensureAgentForChannel(channelId, channelConfig.agentType);
+    await agent.waitForState(AgentEventState, state => state.idle);
 
     this.chatResponses.set(channelId, {
       text: null,
@@ -338,24 +295,19 @@ export default class SlackBot {
       message: `/chat send From: <@${userId}> ${cleanText || "No text sent"}`,
       attachments,
     });
-    this.activeRequests.set(requestId, {channelId, responseSent: false});
+    this.activeRequests.set(requestId, { channelId, responseSent: false });
 
     await this.flushBuffer(channelId);
   }
 
-  private async extractAllAttachments(
-    msg: SlackInboundMessage,
-  ): Promise<InputAttachment[]> {
+  private async extractAllAttachments(msg: SlackInboundMessage): Promise<InputAttachment[]> {
     const attachments: InputAttachment[] = [];
-    const files = ("files" in msg) ? msg.files ?? [] : [];
+    const files = "files" in msg ? (msg.files ?? []) : [];
 
     for (const file of files) {
       const size = file.size;
       if (size && size > this.config.maxFileSize) {
-        this.tokenRingApp.serviceOutput(
-          this.slackService,
-          `Slack file ${file.id ?? file.name ?? "unknown"} exceeded maxFileSize (${size} bytes), skipping.`,
-        );
+        this.tokenRingApp.serviceOutput(this.slackService, `Slack file ${file.id ?? file.name ?? "unknown"} exceeded maxFileSize (${size} bytes), skipping.`);
         continue;
       }
 
@@ -384,24 +336,17 @@ export default class SlackBot {
           timestamp: Date.now(),
         });
       } catch (error: unknown) {
-        this.tokenRingApp.serviceError(
-          this.slackService,
-          `Failed to fetch Slack file ${file.id ?? file.name ?? "unknown"}:`,
-          error,
-        );
+        this.tokenRingApp.serviceError(this.slackService, `Failed to fetch Slack file ${file.id ?? file.name ?? "unknown"}:`, error);
       }
     }
 
     return attachments;
   }
 
-  private ensureAgentForChannel(
-    channelId: string,
-    agentType: string,
-  ): Agent {
+  private ensureAgentForChannel(channelId: string, agentType: string): Agent {
     if (!this.channelAgents.has(channelId)) {
       const agentManager = this.tokenRingApp.requireService(AgentManager);
-      const agent = agentManager.spawnAgent({agentType, headless: true});
+      const agent = agentManager.spawnAgent({ agentType, headless: true });
       this.channelAgents.set(channelId, agent);
     }
 
@@ -409,27 +354,16 @@ export default class SlackBot {
 
     if (!this.channelListeners.has(channelId)) {
       this.channelListeners.add(channelId);
-      agent.runBackgroundTask((signal) =>
-        this.agentEventLoop(channelId, agent, signal),
-      );
+      agent.runBackgroundTask(signal => this.agentEventLoop(channelId, agent, signal));
     }
 
     return agent;
   }
 
-  private async agentEventLoop(
-    channelId: string,
-    agent: Agent,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const eventCursor = agent
-      .getState(AgentEventState)
-      .getEventCursorFromCurrentPosition();
+  private async agentEventLoop(channelId: string, agent: Agent, signal: AbortSignal): Promise<void> {
+    const eventCursor = agent.getState(AgentEventState).getEventCursorFromCurrentPosition();
     try {
-      for await (const state of agent.subscribeStateAsync(
-        AgentEventState,
-        signal,
-      )) {
+      for await (const state of agent.subscribeStateAsync(AgentEventState, signal)) {
         for (const event of state.yieldEventsByCursor(eventCursor)) {
           switch (event.type) {
             case "output.chat": {
@@ -445,10 +379,7 @@ export default class SlackBot {
               for (const req of this.activeRequests.values()) {
                 if (req.channelId === channelId) req.responseSent = true;
               }
-              this.handleChatOutput(
-                channelId,
-                `\n[${event.type.split(".")[1].toUpperCase()}]: ${event.message}\n`,
-              );
+              this.handleChatOutput(channelId, `\n[${event.type.split(".")[1].toUpperCase()}]: ${event.message}\n`);
               break;
             }
             case "agent.response": {
@@ -475,11 +406,7 @@ export default class SlackBot {
       }
     } catch (error: unknown) {
       if (error instanceof Error && error.name !== "AbortError") {
-        this.tokenRingApp.serviceError(
-          this.slackService,
-          "Error in channel listener:",
-          error,
-        );
+        this.tokenRingApp.serviceError(this.slackService, "Error in channel listener:", error);
       }
     } finally {
       this.channelListeners.delete(channelId);
@@ -488,8 +415,7 @@ export default class SlackBot {
 
   private handleChatOutput(channelId: string, content: string): void {
     const response = this.chatResponses.get(channelId);
-    if (!response)
-      throw new Error(`No response found for channel ${channelId}`);
+    if (!response) throw new Error(`No response found for channel ${channelId}`);
 
     if (response.text === null) response.text = "";
     response.text += content;
@@ -542,11 +468,7 @@ export default class SlackBot {
       try {
         const existingTs = response.messageTimestamps[i];
         if (existingTs) {
-          const updatedTs = await this.updateMessageWithFallback(
-            channelId,
-            existingTs,
-            chunk,
-          );
+          const updatedTs = await this.updateMessageWithFallback(channelId, existingTs, chunk);
           response.messageTimestamps[i] = updatedTs;
         } else {
           const postedTs = await this.sendMessage(channelId, chunk);
@@ -555,11 +477,7 @@ export default class SlackBot {
         response.sentTexts[i] = chunk;
       } catch (error: unknown) {
         hadErrors = true;
-        this.tokenRingApp.serviceError(
-          this.slackService,
-          "Error flushing buffer:",
-          error,
-        );
+        this.tokenRingApp.serviceError(this.slackService, "Error flushing buffer:", error);
       }
     }
 
@@ -577,22 +495,13 @@ export default class SlackBot {
       text,
     });
     if (!result.ts || !result.channel) {
-      throw new Error(
-        `Slack did not return message timestamp for channel ${channelId}.`,
-      );
+      throw new Error(`Slack did not return message timestamp for channel ${channelId}.`);
     }
-    this.messageIdToBotUserId.set(
-      `${result.channel}-${result.ts}`,
-      this.botUserId!,
-    );
+    this.messageIdToBotUserId.set(`${result.channel}-${result.ts}`, this.botUserId!);
     return result.ts;
   }
 
-  private async updateMessageWithFallback(
-    channelId: string,
-    timestamp: string,
-    text: string,
-  ): Promise<string> {
+  private async updateMessageWithFallback(channelId: string, timestamp: string, text: string): Promise<string> {
     try {
       await this.app.client.chat.update({
         channel: channelId,

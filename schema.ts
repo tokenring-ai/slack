@@ -7,9 +7,9 @@ export const SlackEscalationBotConfigSchema = z.object({
 export const SlackBotConfigSchema = z.object({
   name: z.string(),
   botToken: z.string().min(1, "Bot token is required"),
-  appToken: z.string().optional(),
+  appToken: z.string().exactOptional(),
   signingSecret: z.string().min(1, "Signing secret is required"),
-  joinMessage: z.string().optional(),
+  joinMessage: z.string().exactOptional(),
   maxFileSize: z.number().default(20_971_520), // 20MB default
   channels: z.record(
     z.string(),
@@ -19,9 +19,9 @@ export const SlackBotConfigSchema = z.object({
       agentType: z.string(),
     }),
   ),
-  dmAgentType: z.string().optional(),
+  dmAgentType: z.string().exactOptional(),
   dmAllowedUsers: z.array(z.string()).default([]),
-  escalation: SlackEscalationBotConfigSchema.optional(),
+  escalation: SlackEscalationBotConfigSchema.exactOptional(),
 });
 
 export type ParsedSlackBotConfig = z.output<typeof SlackBotConfigSchema>;
@@ -29,9 +29,7 @@ export type ParsedSlackBotConfig = z.output<typeof SlackBotConfigSchema>;
 export const SlackServiceConfigSchema = z.object({
   bots: z.record(z.string(), SlackBotConfigSchema).default({}),
 });
-export type ParsedSlackServiceConfig = z.output<
-  typeof SlackServiceConfigSchema
->;
+export type ParsedSlackServiceConfig = z.output<typeof SlackServiceConfigSchema>;
 
 export const SlackEscalationProviderConfigSchema = z.object({
   type: z.literal("slack"),
@@ -39,9 +37,5 @@ export const SlackEscalationProviderConfigSchema = z.object({
   channel: z.string(),
 });
 
-export type ParsedSlackEscalationProviderConfig = z.output<
-  typeof SlackEscalationProviderConfigSchema
->;
-export type ParsedSlackEscalationBotConfig = z.output<
-  typeof SlackEscalationBotConfigSchema
->;
+export type ParsedSlackEscalationProviderConfig = z.output<typeof SlackEscalationProviderConfigSchema>;
+export type ParsedSlackEscalationBotConfig = z.output<typeof SlackEscalationBotConfigSchema>;
