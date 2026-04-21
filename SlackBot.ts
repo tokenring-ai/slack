@@ -1,6 +1,6 @@
-import {App} from "@slack/bolt";
+import {App, type KnownEventFromType, type SayFn} from "@slack/bolt";
 import {type Agent, AgentManager} from "@tokenring-ai/agent";
-import type {InputAttachment} from "@tokenring-ai/agent/AgentEvents";
+import {BaseAttachmentSchema, type InputAttachment} from "@tokenring-ai/agent/AgentEvents";
 import {AgentEventState} from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
 import type {CommunicationChannel} from "@tokenring-ai/escalation/EscalationProvider";
@@ -22,6 +22,15 @@ type ChatResponse = {
   sentTexts: string[];
   isComplete?: boolean;
 };
+
+type SlackAppMentionEvent = KnownEventFromType<"app_mention">;
+type SlackMessageEvent = KnownEventFromType<"message">;
+type SlackInboundMessage =
+  | SlackAppMentionEvent
+  | Extract<SlackMessageEvent, { subtype: undefined }>
+  | Extract<SlackMessageEvent, { subtype: "file_share" }>
+  | Extract<SlackMessageEvent, { subtype: "me_message" }>
+  | Extract<SlackMessageEvent, { subtype: "thread_broadcast" }>;
 
 export default class SlackBot {
   private app!: App;
@@ -65,7 +74,7 @@ export default class SlackBot {
 
     this.app.message(async ({message, say}) => {
       try {
-        await this.handleMessage(message as any, say);
+        await this.handleMessage(message, say);
       } catch (error: unknown) {
         this.tokenRingApp.serviceError(
           this.slackService,
@@ -77,7 +86,7 @@ export default class SlackBot {
 
     this.app.event("app_mention", async ({event, say}) => {
       try {
-        await this.handleMessage(event as any, say);
+        await this.handleMessage(event, say);
       } catch (error: unknown) {
         this.tokenRingApp.serviceError(
           this.slackService,
@@ -202,18 +211,34 @@ export default class SlackBot {
     };
   }
 
-  private async handleMessage(msg: any, say: any): Promise<void> {
+  private isInboundMessage(
+    msg: SlackMessageEvent | SlackAppMentionEvent,
+  ): msg is SlackInboundMessage {
+    return (
+      msg.type === "app_mention" ||
+      msg.subtype === undefined ||
+      msg.subtype === "file_share" ||
+      msg.subtype === "me_message" ||
+      msg.subtype === "thread_broadcast"
+    );
+  }
+
+  private async handleMessage(
+    msg: SlackMessageEvent | SlackAppMentionEvent,
+    say: SayFn,
+  ): Promise<void> {
+    if (!this.isInboundMessage(msg)) return;
+
     const userId = msg.user;
     const channelId = msg.channel;
     const text = msg.text ?? "";
 
-    if (!userId || !channelId || msg.bot_id || msg.subtype === "bot_message")
-      return;
+    if (!userId || !channelId || ("bot_id" in msg && msg.bot_id)) return;
 
     const messageId = `${channelId}-${msg.ts}`;
 
     // Check if reply to tracked message
-    if (msg.thread_ts) {
+    if ("thread_ts" in msg && msg.thread_ts) {
       const threadMessageId = `${channelId}-${msg.thread_ts}`;
       const replyToBotUserId = this.messageIdToBotUserId.get(threadMessageId);
       if (replyToBotUserId !== this.botUserId) return;
@@ -318,12 +343,14 @@ export default class SlackBot {
     await this.flushBuffer(channelId);
   }
 
-  private async extractAllAttachments(msg: any): Promise<InputAttachment[]> {
+  private async extractAllAttachments(
+    msg: SlackInboundMessage,
+  ): Promise<InputAttachment[]> {
     const attachments: InputAttachment[] = [];
-    const files: any[] = Array.isArray(msg.files) ? msg.files : [];
+    const files = ("files" in msg) ? msg.files ?? [] : [];
 
     for (const file of files) {
-      const size = typeof file.size === "number" ? file.size : undefined;
+      const size = file.size;
       if (size && size > this.config.maxFileSize) {
         this.tokenRingApp.serviceOutput(
           this.slackService,
@@ -351,7 +378,7 @@ export default class SlackBot {
         attachments.push({
           type: "attachment",
           name: file.name || `slack_file_${file.id ?? Date.now()}`,
-          mimeType: file.mimetype || "application/octet-stream",
+          mimeType: BaseAttachmentSchema.shape.mimeType.parse(file.mimetype),
           body: Buffer.from(data as ArrayBuffer).toString("base64"),
           encoding: "base64",
           timestamp: Date.now(),
