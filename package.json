@@ -3,10 +3,10 @@
   "description": "Bot integration for interacting with agents through Slack.",
   "version": "0.2.0",
   "dependencies": {
-    "@tokenring-ai/app": "0.2.0",
-    "@tokenring-ai/agent": "0.2.0",
-    "@tokenring-ai/utility": "0.2.0",
-    "@tokenring-ai/escalation": "0.2.0",
+    "@tokenring-ai/app": "workspace:*",
+    "@tokenring-ai/agent": "workspace:*",
+    "@tokenring-ai/utility": "workspace:*",
+    "@tokenring-ai/escalation": "workspace:*",
     "@slack/bolt": "^4.7.0",
     "zod": "^4.3.6"
   },

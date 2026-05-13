@@ -4,9 +4,13 @@ A TokenRing plugin providing Slack bot integration for AI-powered agent interact
 
 ## Overview
 
-This package provides a Slack bot service that integrates with TokenRing agents, enabling natural language conversations through Slack. Each Slack channel gets its own dedicated agent instance that maintains conversation history and context. The service handles message routing, event processing, and automatic agent management. It also supports escalation workflows for agent-to-human communication.
+This package provides a Slack bot service that integrates with TokenRing agents, enabling natural language conversations
+through Slack. Each Slack channel gets its own dedicated agent instance that maintains conversation history and context.
+The service handles message routing, event processing, and automatic agent management. It also supports escalation
+workflows for agent-to-human communication.
 
-The package uses the `@slack/bolt` framework for event handling and supports Socket Mode for firewall-friendly connections.
+The package uses the `@slack/bolt` framework for event handling and supports Socket Mode for firewall-friendly
+connections.
 
 ## Features
 
@@ -23,7 +27,8 @@ The package uses the `@slack/bolt` framework for event handling and supports Soc
 - **Direct Messaging**: Support for direct messages with authorized users
 - **File Attachments**: Download and process Slack file attachments (up to 20MB by default)
 - **Error Handling**: Robust error handling with user-friendly error messages
-- **Plugin Integration**: Seamless integration with TokenRing plugin system with automatic escalation provider registration
+- **Plugin Integration**: Seamless integration with TokenRing plugin system with automatic escalation provider
+  registration
 - **Service Logging**: Uses `serviceOutput` and `serviceError` for consistent logging
 
 ## Installation
@@ -46,7 +51,8 @@ bun add @tokenring-ai/slack
 
 The main service class that manages multiple Slack bots.
 
-**Note**: The class is exported as `SlackBotService` in `index.ts` for backward compatibility, but the actual class name is `SlackService`.
+**Note**: The class is exported as `SlackBotService` in `index.ts` for backward compatibility, but the actual class name
+is `SlackService`.
 
 #### Properties
 
@@ -59,7 +65,8 @@ The main service class that manages multiple Slack bots.
 
 #### Methods
 
-- **`run(signal: AbortSignal): Promise<void>`**: Starts all configured Slack bots and begins listening for messages. Handles graceful shutdown when the signal is aborted.
+- **`run(signal: AbortSignal): Promise<void>`**: Starts all configured Slack bots and begins listening for messages.
+  Handles graceful shutdown when the signal is aborted.
 - **`getBot(botName: string): SlackBot | undefined`**: Gets a bot instance by name
 - **`getAvailableBots(): string[]`**: Returns list of configured bot names
 
@@ -69,11 +76,14 @@ Manages a single Slack bot instance and handles message processing.
 
 #### Methods
 
-- **`constructor(tokenRingApp: TokenRingApp, slackService: SlackService, botName: string, config: ParsedSlackBotConfig)`**: Creates a new Slack bot instance
+- **`constructor(tokenRingApp: TokenRingApp, slackService: SlackService, botName: string, config: ParsedSlackBotConfig)`
+  **: Creates a new Slack bot instance
 - **`start(): Promise<void>`**: Starts the Slack bot, registers event handlers, and announces to configured channels
 - **`stop(): Promise<void>`**: Stops the Slack bot, flushes pending messages, and deletes all channel agents
-- **`createCommunicationChannelWithChannel(channelName: string): CommunicationChannel`**: Creates a communication channel for a configured channel
-- **`createCommunicationChannelWithUser(userId: string): CommunicationChannel`**: Creates a communication channel for a specific user/channel ID
+- **`createCommunicationChannelWithChannel(channelName: string): CommunicationChannel`**: Creates a communication
+  channel for a configured channel
+- **`createCommunicationChannelWithUser(userId: string): CommunicationChannel`**: Creates a communication channel for a
+  specific user/channel ID
 - **`getBotUserId(): string | undefined`**: Returns the bot's user ID
 
 ### SlackEscalationProvider Class
@@ -83,7 +93,8 @@ Implements the `EscalationProvider` interface for escalation workflows.
 #### Methods
 
 - **`constructor(config: ParsedSlackEscalationProviderConfig)`**: Creates a new escalation provider instance
-- **`createCommunicationChannelWithUser(channelName: string, agent: Agent): Promise<CommunicationChannel>`**: Creates a communication channel for escalation workflows
+- **`createCommunicationChannelWithUser(channelName: string, agent: Agent): Promise<CommunicationChannel>`**: Creates a
+  communication channel for escalation workflows
 
 ### splitIntoChunks Function
 
@@ -94,7 +105,7 @@ function splitIntoChunks(text: string | null): string[]
 ```
 
 - **Parameters**:
-  - `text`: The text to split, or null for a "working" message
+- `text`: The text to split, or null for a "working" message
 - **Returns**: Array of message chunks (max 3900 characters each)
 
 ## Usage Examples
@@ -156,7 +167,9 @@ app.install(escalationPlugin);
 await app.start();
 ```
 
-**Note**: When both `slackPlugin` and `escalationPlugin` are installed and escalation configuration is present, the plugin automatically registers `SlackEscalationProvider` instances for each provider with `type: 'slack'` to the `EscalationService`.
+**Note**: When both `slackPlugin` and `escalationPlugin` are installed and escalation configuration is present, the
+plugin automatically registers `SlackEscalationProvider` instances for each provider with `type: 'slack'` to the
+`EscalationService`.
 
 ### Manual Service Creation
 
@@ -261,7 +274,8 @@ await channel[Symbol.asyncDispose]();
 
 ## Configuration
 
-The package uses Zod schema validation for configuration with a nested structure for multiple bots. Schemas are exported from `./schema`.
+The package uses Zod schema validation for configuration with a nested structure for multiple bots. Schemas are exported
+from `./schema`.
 
 ### SlackBotConfigSchema
 
@@ -291,17 +305,17 @@ export type ParsedSlackBotConfig = z.output<typeof SlackBotConfigSchema>;
 
 **Bot Configuration Options:**
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `name` | string | Yes | Bot display name |
-| `botToken` | string | Yes | Slack bot token (xoxb-...) |
-| `signingSecret` | string | Yes | Slack signing secret for request verification |
-| `appToken` | string | No | App-level token for Socket Mode (xapp-...) |
-| `joinMessage` | string | No | Message to post when bot joins channels |
-| `maxFileSize` | number | No | Maximum file size for attachments (default: 20MB) |
-| `channels` | object | Yes | Record of channel configurations |
-| `dmAgentType` | string | No | Agent type for direct messages (enables DMs if set) |
-| `dmAllowedUsers` | string[] | No | Array of user IDs allowed to DM the bot |
+| Property         | Type     | Required | Description                                         |
+|------------------|----------|----------|-----------------------------------------------------|
+| `name`           | string   | Yes      | Bot display name                                    |
+| `botToken`       | string   | Yes      | Slack bot token (xoxb-...)                          |
+| `signingSecret`  | string   | Yes      | Slack signing secret for request verification       |
+| `appToken`       | string   | No       | App-level token for Socket Mode (xapp-...)          |
+| `joinMessage`    | string   | No       | Message to post when bot joins channels             |
+| `maxFileSize`    | number   | No       | Maximum file size for attachments (default: 20MB)   |
+| `channels`       | object   | Yes      | Record of channel configurations                    |
+| `dmAgentType`    | string   | No       | Agent type for direct messages (enables DMs if set) |
+| `dmAllowedUsers` | string[] | No       | Array of user IDs allowed to DM the bot             |
 
 ### SlackServiceConfigSchema
 
@@ -319,11 +333,11 @@ export type ParsedSlackServiceConfig = z.output<typeof SlackServiceConfigSchema>
 
 Each channel in the `channels` record has the following structure:
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `channelId` | string | Yes | Slack channel ID |
-| `allowedUsers` | string[] | No | Array of Slack user IDs allowed to interact (empty = all users) |
-| `agentType` | string | Yes | Agent type to create for the channel |
+| Property       | Type     | Required | Description                                                     |
+|----------------|----------|----------|-----------------------------------------------------------------|
+| `channelId`    | string   | Yes      | Slack channel ID                                                |
+| `allowedUsers` | string[] | No       | Array of Slack user IDs allowed to interact (empty = all users) |
+| `agentType`    | string   | Yes      | Agent type to create for the channel                            |
 
 ### Escalation Provider Configuration
 
@@ -343,11 +357,11 @@ export type ParsedSlackEscalationProviderConfig = z.output<typeof SlackEscalatio
 
 **Escalation Provider Options:**
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `type` | 'slack' | Yes | Must be the literal 'slack' |
-| `bot` | string | Yes | Name of the bot to use |
-| `channel` | string | Yes | Name of the channel configuration to use |
+| Property  | Type    | Required | Description                              |
+|-----------|---------|----------|------------------------------------------|
+| `type`    | 'slack' | Yes      | Must be the literal 'slack'              |
+| `bot`     | string  | Yes      | Name of the bot to use                   |
+| `channel` | string  | Yes      | Name of the channel configuration to use |
 
 ## Integration
 
@@ -386,14 +400,15 @@ await app.start();
 Services are automatically registered when the plugin is installed with configuration:
 
 1. `SlackService` is registered with the application via `app.addServices()`
-2. If escalation configuration is present and `escalationPlugin` is also installed, `SlackEscalationProvider` instances are automatically registered with the `EscalationService`
+2. If escalation configuration is present and `escalationPlugin` is also installed, `SlackEscalationProvider` instances
+   are automatically registered with the `EscalationService`
 
 ### Escalation Service Integration
 
 The escalation provider integrates with the `EscalationService`:
 
 ```typescript
-import {EscalationService} from '@tokenring-ai/escalation';
+import { EscalationService } from '@tokenring-ai/escalation';
 
 const escalationService = app.requireServiceByType(EscalationService);
 
@@ -411,9 +426,9 @@ const channel = await escalationService.initiateContactWithUserOrGroup(
 If you prefer manual registration, you can register the escalation provider directly:
 
 ```typescript
-import {EscalationService} from '@tokenring-ai/escalation';
-import {SlackEscalationProvider} from '@tokenring-ai/slack';
-import {SlackEscalationProviderConfigSchema} from '@tokenring-ai/slack/schema';
+import { EscalationService } from '@tokenring-ai/escalation';
+import { SlackEscalationProvider } from '@tokenring-ai/slack';
+import { SlackEscalationProviderConfigSchema } from '@tokenring-ai/slack/schema';
 
 const escalationService = app.requireServiceByType(EscalationService);
 escalationService.registerProvider('slackProvider', new SlackEscalationProvider(
@@ -427,7 +442,8 @@ escalationService.registerProvider('slackProvider', new SlackEscalationProvider(
 
 ## RPC Endpoints
 
-This package does not define RPC endpoints. Communication is handled through Slack's API via the `@slack/bolt` framework.
+This package does not define RPC endpoints. Communication is handled through Slack's API via the `@slack/bolt`
+framework.
 
 ## State Management
 
@@ -439,7 +455,8 @@ This package does not maintain persistent state. All state is managed in-memory 
 
 ## Chat Commands
 
-This package does not define chat commands. Commands are handled by the agent system and processed through Slack messages.
+This package does not define chat commands. Commands are handled by the agent system and processed through Slack
+messages.
 
 ## Best Practices
 
@@ -502,24 +519,24 @@ pkg/slack/
 
 ### Production Dependencies
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `@tokenring-ai/app` | 0.2.0 | TokenRing application framework |
-| `@tokenring-ai/chat` | 0.2.0 | Chat functionality |
-| `@tokenring-ai/agent` | 0.2.0 | Agent system |
-| `@tokenring-ai/utility` | 0.2.0 | Shared utilities |
-| `@tokenring-ai/escalation` | 0.2.0 | Escalation service |
-| `@slack/bolt` | ^4.6.0 | Slack Bolt framework |
-| `@slack/web-api` | ^7.15.0 | Slack Web API |
-| `axios` | ^1.13.6 | HTTP client for file downloads |
-| `zod` | ^4.3.6 | Schema validation |
+| Package                    | Version | Purpose                         |
+|----------------------------|---------|---------------------------------|
+| `@tokenring-ai/app`        | 0.2.0   | TokenRing application framework |
+| `@tokenring-ai/chat`       | 0.2.0   | Chat functionality              |
+| `@tokenring-ai/agent`      | 0.2.0   | Agent system                    |
+| `@tokenring-ai/utility`    | 0.2.0   | Shared utilities                |
+| `@tokenring-ai/escalation` | 0.2.0   | Escalation service              |
+| `@slack/bolt`              | ^4.6.0  | Slack Bolt framework            |
+| `@slack/web-api`           | ^7.15.0 | Slack Web API                   |
+| `axios`                    | ^1.13.6 | HTTP client for file downloads  |
+| `zod`                      | ^4.3.6  | Schema validation               |
 
 ### Development Dependencies
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `vitest` | ^4.1.1 | Testing framework |
-| `typescript` | ^6.0.2 | TypeScript compiler |
+| Package      | Version | Purpose             |
+|--------------|---------|---------------------|
+| `vitest`     | ^4.1.1  | Testing framework   |
+| `typescript` | ^6.0.2  | TypeScript compiler |
 
 ## Related Components
 
@@ -647,7 +664,8 @@ The Slack bot automatically manages agent lifecycle:
 
 1. **Agent Creation**: When a message is received in a channel, an agent is created if one doesn't exist
 2. **Agent Reuse**: Existing agents are reused for subsequent messages in the same channel
-3. **Agent Deletion**: When the bot stops, all channel agents are deleted via `AgentManager.deleteAgent` with reason "Slack bot was shut down."
+3. **Agent Deletion**: When the bot stops, all channel agents are deleted via `AgentManager.deleteAgent` with reason "
+   Slack bot was shut down."
 
 ## License
 

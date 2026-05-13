@@ -187,6 +187,10 @@ export default class SlackBot {
     };
   }
 
+  getBotUserId(): string | undefined {
+    return this.botUserId;
+  }
+
   private isInboundMessage(msg: SlackMessageEvent | SlackAppMentionEvent): msg is SlackInboundMessage {
     return (
       msg.type === "app_mention" ||
@@ -519,9 +523,5 @@ export default class SlackBot {
     if (!(error instanceof Error)) return false;
     const message = error.message.toLowerCase();
     return message.includes("message_not_found");
-  }
-
-  getBotUserId(): string | undefined {
-    return this.botUserId;
   }
 }
