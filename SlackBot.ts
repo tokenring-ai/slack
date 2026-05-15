@@ -409,7 +409,7 @@ export default class SlackBot {
         }
       }
     } catch (error: unknown) {
-      if (error instanceof Error && error.name !== "AbortError") {
+      if (Error.isError(error) && error.name !== "AbortError") {
         this.tokenRingApp.serviceError(this.slackService, "Error in channel listener:", error);
       }
     } finally {
@@ -520,7 +520,7 @@ export default class SlackBot {
   }
 
   private isMessageNotFoundError(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
+    if (!(Error.isError(error))) return false;
     const message = error.message.toLowerCase();
     return message.includes("message_not_found");
   }
