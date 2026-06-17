@@ -4,8 +4,8 @@ import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
 import { z } from "zod";
 import { SlackEscalationProvider } from "./index.ts";
 import packageJSON from "./package.json" with { type: "json" };
-import SlackService from "./SlackService.ts";
 import { type ParsedSlackBotConfig, SlackServiceConfigSchema } from "./schema.ts";
+import SlackService from "./SlackService.ts";
 
 const packageConfigSchema = z.object({
   slack: SlackServiceConfigSchema.prefault({ bots: {} }),

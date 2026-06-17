@@ -5,8 +5,8 @@ import { AgentEventState } from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
 import type { CommunicationChannel } from "@tokenring-ai/escalation/EscalationProvider";
 import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
-import type SlackService from "./SlackService.ts";
 import type { ParsedSlackBotConfig } from "./schema.ts";
+import type SlackService from "./SlackService.ts";
 import { splitIntoChunks } from "./splitIntoChunks.ts";
 
 type UserChannel = {

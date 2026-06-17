@@ -2,8 +2,8 @@ import type TokenRingApp from "@tokenring-ai/app";
 import type { TokenRingService } from "@tokenring-ai/app/types";
 import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
 import KeyedRegistry from "@tokenring-ai/utility/registry/KeyedRegistry";
-import SlackBot from "./SlackBot.ts";
 import type { ParsedSlackServiceConfig } from "./schema.ts";
+import SlackBot from "./SlackBot.ts";
 
 export default class SlackService implements TokenRingService {
   readonly name = "SlackService";
