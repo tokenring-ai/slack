@@ -1,8 +1,8 @@
 import { App } from "@slack/bolt";
 import AgentManagerImpl from "@tokenring-ai/agent/services/AgentManager";
-import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent";
+import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent.test";
 import TokenRingApp from "@tokenring-ai/app";
-import createTestingApp from "@tokenring-ai/app/test/createTestingApp";
+import createTestingApp from "@tokenring-ai/app/test/createTestingApp.test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type ParsedSlackServiceConfig } from "./schema";
 import SlackService from "./SlackService";
