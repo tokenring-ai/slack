@@ -383,7 +383,7 @@ export default class SlackBot {
               for (const req of this.activeRequests.values()) {
                 if (req.channelId === channelId) req.responseSent = true;
               }
-              this.handleChatOutput(channelId, `\n[${event.type.split(".")[1].toUpperCase()}]: ${event.message}\n`);
+              this.handleChatOutput(channelId, `\n[${event.type.split(".")[1]!.toUpperCase()}]: ${event.message}\n`);
               break;
             }
             case "agent.response": {
@@ -466,17 +466,15 @@ export default class SlackBot {
     const syncFrom = response.isComplete ? 0 : Math.max(0, chunks.length - 2);
 
     for (let i = syncFrom; i < chunks.length; i++) {
-      const chunk = chunks[i];
+      const chunk = chunks[i]!;
       if (chunk === response.sentTexts[i]) continue;
 
       try {
         const existingTs = response.messageTimestamps[i];
         if (existingTs) {
-          const updatedTs = await this.updateMessageWithFallback(channelId, existingTs, chunk);
-          response.messageTimestamps[i] = updatedTs;
+          response.messageTimestamps[i] = await this.updateMessageWithFallback(channelId, existingTs, chunk);
         } else {
-          const postedTs = await this.sendMessage(channelId, chunk);
-          response.messageTimestamps[i] = postedTs;
+          response.messageTimestamps[i] = await this.sendMessage(channelId, chunk);
         }
         response.sentTexts[i] = chunk;
       } catch (error: unknown) {
@@ -520,7 +518,7 @@ export default class SlackBot {
   }
 
   private isMessageNotFoundError(error: unknown): boolean {
-    if (!(Error.isError(error))) return false;
+    if (!Error.isError(error)) return false;
     const message = error.message.toLowerCase();
     return message.includes("message_not_found");
   }
