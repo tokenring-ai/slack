@@ -5,8 +5,8 @@ import { AgentEventState } from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
 import type { CommunicationChannel } from "@tokenring-ai/escalation/EscalationProvider";
 import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
-import type { ParsedSlackBotConfig } from "./schema.ts";
 import type SlackService from "./SlackService.ts";
+import type { ParsedSlackBotConfig } from "./schema.ts";
 import { splitIntoChunks } from "./splitIntoChunks.ts";
 
 type UserChannel = {
@@ -311,7 +311,7 @@ export default class SlackBot {
     for (const file of files) {
       const size = file.size;
       if (size && size > this.config.maxFileSize) {
-        this.tokenRingApp.serviceOutput(this.slackService, `Slack file ${file.id ?? file.name ?? "unknown"} exceeded maxFileSize (${size} bytes), skipping.`);
+        this.tokenRingApp.serviceOutput(this.slackService, `Slack file ${file.id} exceeded maxFileSize (${size} bytes), skipping.`);
         continue;
       }
 
@@ -333,14 +333,14 @@ export default class SlackBot {
 
         attachments.push({
           type: "attachment",
-          name: file.name || `slack_file_${file.id ?? Date.now()}`,
+          name: file.name || `slack_file_${file.id}`,
           mimeType: BaseAttachmentSchema.shape.mimeType.parse(file.mimetype),
           body: Buffer.from(data as ArrayBuffer).toString("base64"),
           encoding: "base64",
           timestamp: Date.now(),
         });
       } catch (error: unknown) {
-        this.tokenRingApp.serviceError(this.slackService, `Failed to fetch Slack file ${file.id ?? file.name ?? "unknown"}:`, error);
+        this.tokenRingApp.serviceError(this.slackService, `Failed to fetch Slack file ${file.id}:`, error);
       }
     }
 
