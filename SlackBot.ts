@@ -1,6 +1,6 @@
 import { App, type KnownEventFromType, type SayFn } from "@slack/bolt";
 import { type Agent, AgentManager } from "@tokenring-ai/agent";
-import { BaseAttachmentSchema, type InputAttachment } from "@tokenring-ai/agent/AgentEvents";
+import { type InputAttachment, InputAttachmentSchema } from "@tokenring-ai/agent/AgentEvents";
 import { AgentEventState } from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
 import type { CommunicationChannel } from "@tokenring-ai/escalation/EscalationProvider";
@@ -334,7 +334,7 @@ export default class SlackBot {
         attachments.push({
           type: "attachment",
           name: file.name || `slack_file_${file.id}`,
-          mimeType: BaseAttachmentSchema.shape.mimeType.parse(file.mimetype),
+          mimeType: InputAttachmentSchema.shape.mimeType.parse(file.mimetype),
           body: Buffer.from(data as ArrayBuffer).toString("base64"),
           encoding: "base64",
           timestamp: Date.now(),
