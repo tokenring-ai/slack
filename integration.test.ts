@@ -79,7 +79,7 @@ describe("Slack Integration Tests", () => {
     mockApp.addServices(agentManager);
 
     // Spy on spawnAgent and return a testing agent
-    vi.spyOn(agentManager, "spawnAgent").mockImplementation(async (config) => {
+    vi.spyOn(agentManager, "spawnAgent").mockImplementation((config) => {
       const agent = createTestingAgent(mockApp);
       vi.spyOn(agent, "handleInput").mockReturnValue("request-1" as any);
       vi.spyOn(agent, "subscribeState").mockReturnValue(vi.fn());
@@ -126,7 +126,9 @@ describe("Slack Integration Tests", () => {
             name: "minimal-bot",
             botToken: "xoxb-minimal",
             signingSecret: "minimal-secret",
-            channels: {}
+            maxFileSize: 20_971_520,
+            channels: {},
+            dmAllowedUsers: []
           }
         }
       };
@@ -150,25 +152,29 @@ describe("Slack Integration Tests", () => {
             name: "bot1",
             botToken: "xoxb-bot1",
             signingSecret: "secret1",
+            maxFileSize: 20_971_520,
             channels: {
               "channel1": {
                 channelId: "C111",
                 allowedUsers: [],
                 agentType: "leader"
               }
-            }
+            },
+            dmAllowedUsers: []
           },
           "bot2": {
             name: "bot2",
             botToken: "xoxb-bot2",
             signingSecret: "secret2",
+            maxFileSize: 20_971_520,
             channels: {
               "channel2": {
                 channelId: "C222",
                 allowedUsers: ["U123"],
                 agentType: "researcher"
               }
-            }
+            },
+            dmAllowedUsers: []
           }
         }
       };
@@ -184,6 +190,7 @@ describe("Slack Integration Tests", () => {
             name: "empty-bot",
             botToken: "xoxb-empty",
             signingSecret: "empty-secret",
+            maxFileSize: 20_971_520,
             channels: {},
             dmAgentType: "leader",
             dmAllowedUsers: []
@@ -204,25 +211,29 @@ describe("Slack Integration Tests", () => {
             name: "bot1",
             botToken: "xoxb-bot1",
             signingSecret: "secret1",
+            maxFileSize: 20_971_520,
             channels: {
               "channel1": {
                 channelId: "C111",
                 allowedUsers: [],
                 agentType: "leader"
               }
-            }
+            },
+            dmAllowedUsers: []
           },
           "bot2": {
             name: "bot2",
             botToken: "xoxb-bot2",
             signingSecret: "secret2",
+            maxFileSize: 20_971_520,
             channels: {
               "channel2": {
                 channelId: "C222",
                 allowedUsers: [],
                 agentType: "researcher"
               }
-            }
+            },
+            dmAllowedUsers: []
           }
         }
       };
@@ -255,9 +266,9 @@ describe("Slack Integration Tests", () => {
       expect(mockSlackApp.start).toHaveBeenCalled();
 
       // Simulate shutdown - get the callback passed to waitForAbort
-      const abortCallback = mockWaitForAbort.mock.calls[0][1];
+      const abortCallback = mockWaitForAbort.mock.calls[0]?.[1];
 
-      await abortCallback({} as any);
+      await abortCallback!({} as any);
 
       expect(mockSlackApp.stop).toHaveBeenCalled();
     });
@@ -271,7 +282,7 @@ describe("Slack Integration Tests", () => {
       failingApp.addServices(agentManager);
 
       // Mock spawnAgent to return a testing agent
-      vi.spyOn(agentManager, "spawnAgent").mockImplementation(async (config) => {
+      vi.spyOn(agentManager, "spawnAgent").mockImplementation((config) => {
         const agent = createTestingAgent(failingApp);
         vi.spyOn(agent, "handleInput").mockReturnValue("request-1" as any);
         vi.spyOn(agent, "subscribeState").mockReturnValue(vi.fn());
@@ -288,7 +299,9 @@ describe("Slack Integration Tests", () => {
             name: "failing-bot",
             botToken: "xoxb-failing",
             signingSecret: "failing-secret",
-            channels: {}
+            maxFileSize: 20_971_520,
+            channels: {},
+            dmAllowedUsers: []
           }
         }
       };
@@ -364,9 +377,9 @@ describe("Slack Integration Tests", () => {
       expect(mockSlackApp.start).toHaveBeenCalled();
 
       // Simulate shutdown
-      const abortCallback = mockWaitForAbort.mock.calls[0][1];
+      const abortCallback = mockWaitForAbort.mock.calls[0]?.[1];
 
-      await abortCallback({} as any);
+      await abortCallback!({} as any);
 
       expect(mockSlackApp.stop).toHaveBeenCalled();
     });
