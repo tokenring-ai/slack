@@ -1,19 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { App } from "@slack/bolt";
+import { afterEach,beforeEach,describe,expect,it,mock,spyOn } from "bun:test";
 import AgentManagerImpl from "@tokenring-ai/agent/services/AgentManager";
 import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent.test";
-import type TokenRingApp from "@tokenring-ai/app";
+import TokenRingApp from "@tokenring-ai/app";
 import createTestingApp from "@tokenring-ai/app/test/createTestingApp.test";
+import { type ParsedSlackServiceConfig } from "./schema";
 import SlackService from "./SlackService";
-import type { ParsedSlackServiceConfig } from "./schema";
 
 const mockWaitForAbort = mock();
-void mock.module("@tokenring-ai/utility/promise/waitForAbort", () => ({
+mock.module("@tokenring-ai/utility/promise/waitForAbort", () => ({
   default: (...args: any[]) => mockWaitForAbort(...args),
 }));
 
 // Replace the App import with proper mocking
-void mock.module("@slack/bolt", () => {
+mock.module("@slack/bolt", () => {
   const mockClient: any = {
     auth: {
       test: mock().mockResolvedValue({
@@ -33,14 +33,16 @@ void mock.module("@slack/bolt", () => {
   };
 
   return {
-    App: mock().mockImplementation(() => ({
-      command: mock(),
-      event: mock(),
-      message: mock(),
-      start: mock().mockResolvedValue(undefined),
-      stop: mock().mockResolvedValue(undefined),
-      client: mockClient,
-    })),
+    App: mock().mockImplementation(function () {
+      return {
+        command: mock(),
+        event: mock(),
+        message: mock(),
+        start: mock().mockResolvedValue(undefined),
+        stop: mock().mockResolvedValue(undefined),
+        client: mockClient,
+      };
+    }),
   };
 });
 
@@ -56,17 +58,17 @@ describe("Slack Integration Tests", () => {
         signingSecret: "test-signing-secret",
         appToken: "xapp-test-token",
         channels: {
-          engineering: {
+          "engineering": {
             channelId: "C1234567890",
             allowedUsers: ["U06T1LWJG", "UABCDEF123"],
-            agentType: "leader",
-          },
+            agentType: "leader"
+          }
         },
         dmAgentType: "leader",
         dmAllowedUsers: ["U06T1LWJG"],
-        maxFileSize: 20_971_520,
-      },
-    },
+        maxFileSize: 20_971_520
+      }
+    }
   };
 
   beforeEach(() => {
@@ -77,7 +79,7 @@ describe("Slack Integration Tests", () => {
     mockApp.addServices(agentManager);
 
     // Spy on spawnAgent and return a testing agent
-    spyOn(agentManager, "spawnAgent").mockImplementation(_config => {
+    spyOn(agentManager, "spawnAgent").mockImplementation((config) => {
       const agent = createTestingAgent(mockApp);
       spyOn(agent, "handleInput").mockReturnValue("request-1" as any);
       spyOn(agent, "subscribeState").mockReturnValue(mock());
@@ -91,7 +93,8 @@ describe("Slack Integration Tests", () => {
     slackService = new SlackService(mockApp, mockConfig);
   });
 
-  afterEach(() => {});
+  afterEach(() => {
+  });
 
   describe("service initialization", () => {
     it("should initialize SlackService with valid config", () => {
@@ -124,9 +127,9 @@ describe("Slack Integration Tests", () => {
             signingSecret: "minimal-secret",
             maxFileSize: 20_971_520,
             channels: {},
-            dmAllowedUsers: [],
-          },
-        },
+            dmAllowedUsers: []
+          }
+        }
       };
 
       const minimalService = new SlackService(mockApp, minimalConfig);
@@ -144,35 +147,35 @@ describe("Slack Integration Tests", () => {
       // Test with multiple bots
       const multiBotConfig: ParsedSlackServiceConfig = {
         bots: {
-          bot1: {
+          "bot1": {
             name: "bot1",
             botToken: "xoxb-bot1",
             signingSecret: "secret1",
             maxFileSize: 20_971_520,
             channels: {
-              channel1: {
+              "channel1": {
                 channelId: "C111",
                 allowedUsers: [],
-                agentType: "leader",
-              },
+                agentType: "leader"
+              }
             },
-            dmAllowedUsers: [],
+            dmAllowedUsers: []
           },
-          bot2: {
+          "bot2": {
             name: "bot2",
             botToken: "xoxb-bot2",
             signingSecret: "secret2",
             maxFileSize: 20_971_520,
             channels: {
-              channel2: {
+              "channel2": {
                 channelId: "C222",
                 allowedUsers: ["U123"],
-                agentType: "researcher",
-              },
+                agentType: "researcher"
+              }
             },
-            dmAllowedUsers: [],
-          },
-        },
+            dmAllowedUsers: []
+          }
+        }
       };
 
       const multiService = new SlackService(mockApp, multiBotConfig);
@@ -189,9 +192,9 @@ describe("Slack Integration Tests", () => {
             maxFileSize: 20_971_520,
             channels: {},
             dmAgentType: "leader",
-            dmAllowedUsers: [],
-          },
-        },
+            dmAllowedUsers: []
+          }
+        }
       };
 
       const emptyService = new SlackService(mockApp, emptyChannelsConfig);
@@ -203,35 +206,35 @@ describe("Slack Integration Tests", () => {
     it("should manage multiple bots correctly", async () => {
       const multiBotConfig: ParsedSlackServiceConfig = {
         bots: {
-          bot1: {
+          "bot1": {
             name: "bot1",
             botToken: "xoxb-bot1",
             signingSecret: "secret1",
             maxFileSize: 20_971_520,
             channels: {
-              channel1: {
+              "channel1": {
                 channelId: "C111",
                 allowedUsers: [],
-                agentType: "leader",
-              },
+                agentType: "leader"
+              }
             },
-            dmAllowedUsers: [],
+            dmAllowedUsers: []
           },
-          bot2: {
+          "bot2": {
             name: "bot2",
             botToken: "xoxb-bot2",
             signingSecret: "secret2",
             maxFileSize: 20_971_520,
             channels: {
-              channel2: {
+              "channel2": {
                 channelId: "C222",
                 allowedUsers: [],
-                agentType: "researcher",
-              },
+                agentType: "researcher"
+              }
             },
-            dmAllowedUsers: [],
-          },
-        },
+            dmAllowedUsers: []
+          }
+        }
       };
 
       const multiService = new SlackService(mockApp, multiBotConfig);
@@ -278,7 +281,7 @@ describe("Slack Integration Tests", () => {
       failingApp.addServices(agentManager);
 
       // Mock spawnAgent to return a testing agent
-      spyOn(agentManager, "spawnAgent").mockImplementation(_config => {
+      spyOn(agentManager, "spawnAgent").mockImplementation((config) => {
         const agent = createTestingAgent(failingApp);
         spyOn(agent, "handleInput").mockReturnValue("request-1" as any);
         spyOn(agent, "subscribeState").mockReturnValue(mock());
@@ -297,9 +300,9 @@ describe("Slack Integration Tests", () => {
             signingSecret: "failing-secret",
             maxFileSize: 20_971_520,
             channels: {},
-            dmAllowedUsers: [],
-          },
-        },
+            dmAllowedUsers: []
+          }
+        }
       };
 
       // Mock auth.test to fail for this specific test
@@ -313,25 +316,27 @@ describe("Slack Integration Tests", () => {
         },
       };
 
-      (App as any).mockImplementation(() => ({
-        command: mock(),
-        event: mock(),
-        message: mock(),
-        start: mock().mockImplementation(async () => {
-          await mockClient.auth.test();
-        }),
-        stop: mock().mockResolvedValue(undefined),
-        client: mockClient,
-      }));
+      (App as any).mockImplementation(function () {
+        return {
+          command: mock(),
+          event: mock(),
+          message: mock(),
+          start: mock().mockImplementation(async () => {
+            await mockClient.auth.test();
+          }),
+          stop: mock().mockResolvedValue(undefined),
+          client: mockClient,
+        };
+      });
 
       const failingService = new SlackService(failingApp, failingConfig);
       const mockAbortSignal = { aborted: false } as AbortSignal;
 
       // Starting should fail due to auth
-      expect(failingService.run(mockAbortSignal)).rejects.toThrow("Invalid token");
+      await expect(failingService.run(mockAbortSignal)).rejects.toThrow("Invalid token");
 
       // Restore the default mock
-      (App as any).mockImplementation(() => {
+      (App as any).mockImplementation(function () {
         const defaultMockClient: any = {
           auth: {
             test: mock().mockResolvedValue({
