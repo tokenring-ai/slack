@@ -483,7 +483,7 @@ messages.
 
 ## Testing and Development
 
-The package includes comprehensive integration tests using vitest:
+The package includes comprehensive integration tests using bun test:
 
 ```bash
 # Run all tests
@@ -511,7 +511,6 @@ pkg/slack/
 ├── SlackEscalationProvider.ts  # Escalation provider implementation
 ├── splitIntoChunks.ts          # Message chunking utility for Slack's 3900 char limit
 ├── integration.test.ts         # Integration tests with mocked Slack Bolt
-├── vitest.config.ts           # Test configuration
 └── package.json               # Package metadata and dependencies
 ```
 
@@ -535,7 +534,7 @@ pkg/slack/
 
 | Package      | Version | Purpose             |
 |--------------|---------|---------------------|
-| `vitest`     | ^4.1.1  | Testing framework   |
+| `bun test`     | builtin  | Testing framework   |
 | `typescript` | ^6.0.2  | TypeScript compiler |
 
 ## Related Components
