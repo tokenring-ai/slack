@@ -5,7 +5,7 @@ import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent.test
 import type TokenRingApp from "@tokenring-ai/app";
 import createTestingApp from "@tokenring-ai/app/test/createTestingApp.test";
 import SlackService from "./SlackService";
-import type { ParsedSlackServiceConfig } from "./schema";
+import type { ResolvedSlackServiceConfig } from "./schema";
 
 const mockWaitForAbort = mock();
 void mock.module("@tokenring-ai/utility/promise/waitForAbort", () => ({
@@ -48,7 +48,7 @@ describe("Slack Integration Tests", () => {
   let mockApp: TokenRingApp;
   let slackService: SlackService;
 
-  const mockConfig: ParsedSlackServiceConfig = {
+  const mockConfig: ResolvedSlackServiceConfig = {
     bots: {
       "test-bot": {
         name: "test-bot",
@@ -116,7 +116,7 @@ describe("Slack Integration Tests", () => {
     });
 
     it("should handle minimal bot configuration", () => {
-      const minimalConfig: ParsedSlackServiceConfig = {
+      const minimalConfig: ResolvedSlackServiceConfig = {
         bots: {
           "minimal-bot": {
             name: "minimal-bot",
@@ -142,7 +142,7 @@ describe("Slack Integration Tests", () => {
       expect(fullService).toBeDefined();
 
       // Test with multiple bots
-      const multiBotConfig: ParsedSlackServiceConfig = {
+      const multiBotConfig: ResolvedSlackServiceConfig = {
         bots: {
           bot1: {
             name: "bot1",
@@ -180,7 +180,7 @@ describe("Slack Integration Tests", () => {
     });
 
     it("should handle empty channels configuration", () => {
-      const emptyChannelsConfig: ParsedSlackServiceConfig = {
+      const emptyChannelsConfig: ResolvedSlackServiceConfig = {
         bots: {
           "empty-bot": {
             name: "empty-bot",
@@ -201,7 +201,7 @@ describe("Slack Integration Tests", () => {
 
   describe("bot management integration", () => {
     it("should manage multiple bots correctly", async () => {
-      const multiBotConfig: ParsedSlackServiceConfig = {
+      const multiBotConfig: ResolvedSlackServiceConfig = {
         bots: {
           bot1: {
             name: "bot1",
@@ -289,7 +289,7 @@ describe("Slack Integration Tests", () => {
         return agent;
       });
 
-      const failingConfig: ParsedSlackServiceConfig = {
+      const failingConfig: ResolvedSlackServiceConfig = {
         bots: {
           "failing-bot": {
             name: "failing-bot",

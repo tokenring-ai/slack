@@ -3,7 +3,7 @@ import type { TokenRingService } from "@tokenring-ai/app/types";
 import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
 import KeyedRegistry from "@tokenring-ai/utility/registry/KeyedRegistry";
 import SlackBot from "./SlackBot.ts";
-import type { ParsedSlackServiceConfig } from "./schema.ts";
+import type { ResolvedSlackServiceConfig } from "./schema.ts";
 
 export default class SlackService implements TokenRingService {
   readonly name = "SlackService";
@@ -16,7 +16,7 @@ export default class SlackService implements TokenRingService {
 
   constructor(
     private app: TokenRingApp,
-    private options: ParsedSlackServiceConfig,
+    private options: ResolvedSlackServiceConfig,
   ) {}
 
   async run(signal: AbortSignal): Promise<void> {

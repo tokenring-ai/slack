@@ -6,7 +6,7 @@ import type TokenRingApp from "@tokenring-ai/app";
 import type { CommunicationChannel } from "@tokenring-ai/escalation/EscalationProvider";
 import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
 import type SlackService from "./SlackService.ts";
-import type { ParsedSlackBotConfig } from "./schema.ts";
+import type { ResolvedSlackBotConfig } from "./schema.ts";
 import { splitIntoChunks } from "./splitIntoChunks.ts";
 
 type UserChannel = {
@@ -51,7 +51,7 @@ export default class SlackBot {
     private tokenRingApp: TokenRingApp,
     private slackService: SlackService,
     private botName: string,
-    private config: ParsedSlackBotConfig,
+    private config: ResolvedSlackBotConfig,
   ) {}
 
   async start(): Promise<void> {

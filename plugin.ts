@@ -1,36 +1,15 @@
 import type { TokenRingPlugin } from "@tokenring-ai/app";
 import { EscalationService } from "@tokenring-ai/escalation";
-import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
+import { requireSecret, resolveSecret } from "@tokenring-ai/secrets/SecretService";
 import { z } from "zod";
 import { SlackEscalationProvider } from "./index.ts";
 import packageJSON from "./package.json" with { type: "json" };
 import SlackService from "./SlackService.ts";
-import { type ParsedSlackBotConfig, SlackServiceConfigSchema } from "./schema.ts";
+import { type ResolvedSlackBotConfig, SlackServiceConfigSchema } from "./schema.ts";
 
 const packageConfigSchema = z.object({
   slack: SlackServiceConfigSchema.prefault({ bots: {} }),
 });
-
-function addBotsFromEnv(bots: Record<string, Partial<ParsedSlackBotConfig>>) {
-  for (const [key, value] of Object.entries(process.env)) {
-    const match = key.match(/^SLACK_BOT_TOKEN(\d*)$/);
-    if (!match || !value) continue;
-    const n = match[1];
-    const signingSecret = process.env[`SLACK_SIGNING_SECRET${n}`];
-    if (!signingSecret) continue;
-    const name = process.env[`SLACK_BOT_NAME${n}`] ?? `Slack Bot${n ? ` ${n}` : ""}`;
-    const escalationChannel = process.env[`SLACK_ESCALATION_CHANNEL${n}`];
-
-    bots[name] = stripUndefinedKeys({
-      name,
-      botToken: value,
-      signingSecret,
-      appToken: process.env[`SLACK_APP_TOKEN${n}`],
-      escalation: escalationChannel ? { channel: escalationChannel } : undefined,
-      channels: {},
-    });
-  }
-}
 
 export default {
   name: packageJSON.name,
@@ -38,10 +17,23 @@ export default {
   version: packageJSON.version,
   description: packageJSON.description,
   install(app, config) {
-    addBotsFromEnv(config.slack.bots);
-    if (Object.keys(config.slack.bots).length === 0) return;
+    const bots = Object.entries(config.slack.bots);
+    if (bots.length === 0) return;
 
-    app.addServices(new SlackService(app, SlackServiceConfigSchema.parse(config.slack)));
+    // Resolve up front so a misconfigured token fails at boot, not on first message.
+    const resolvedBots: Record<string, ResolvedSlackBotConfig> = {};
+    for (const [botName, bot] of bots) {
+      const { botToken, signingSecret, appToken: appTokenRef, ...rest } = bot;
+      const appToken = resolveSecret(app, appTokenRef);
+      resolvedBots[botName] = {
+        ...rest,
+        botToken: requireSecret(app, botToken, `Slack bot "${botName}" bot token`),
+        signingSecret: requireSecret(app, signingSecret, `Slack bot "${botName}" signing secret`),
+        ...(appToken !== undefined && { appToken }),
+      };
+    }
+
+    app.addServices(new SlackService(app, { bots: resolvedBots }));
 
     app.waitForService(EscalationService, escalationService => {
       for (const [botName, bot] of Object.entries(config.slack.bots)) {

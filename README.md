@@ -585,13 +585,28 @@ Add these OAuth scopes under "OAuth & Permissions":
 
 In each channel: `/invite @YourBotName`
 
-### 7. Set Up Environment Variables
+### 7. Declare the Bot in Configuration
 
-```bash
-SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_SIGNING_SECRET=your-signing-secret
-SLACK_APP_TOKEN=xapp-your-app-token  # Optional for Socket Mode
+```yaml
+slack:
+  bots:
+    my-bot:
+      name: my-bot
+      botToken:
+        source: env
+        env: SLACK_BOT_TOKEN
+      signingSecret:
+        source: env
+        env: SLACK_SIGNING_SECRET
+      appToken:               # optional, for Socket Mode
+        source: env
+        env: SLACK_APP_TOKEN
+      channels: {}
 ```
+
+Numbered `SLACK_BOT_TOKEN1`/`SLACK_SIGNING_SECRET1`/... environment variables are no longer discovered
+automatically — declare the bot above and point each credential at the variable you already use, or at a vault
+entry (`source: vault`) or a literal value.
 
 ## Event Handling
 
