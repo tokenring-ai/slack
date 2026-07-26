@@ -4,9 +4,11 @@ import { type ChatAttachment, ChatAttachmentSchema } from "@tokenring-ai/agent/A
 import { AgentEventState } from "@tokenring-ai/agent/state/agentEventState";
 import type TokenRingApp from "@tokenring-ai/app";
 import type { CommunicationChannel } from "@tokenring-ai/escalation/EscalationProvider";
+import EnhancedMap from "@tokenring-ai/utility/map/enhancedMap";
 import { stripUndefinedKeys } from "@tokenring-ai/utility/object/stripObject";
-import type SlackService from "./SlackService.ts";
+import EnhancedSet from "@tokenring-ai/utility/set/enhancedSet";
 import type { ResolvedSlackBotConfig } from "./schema.ts";
+import type SlackService from "./SlackService.ts";
 import { splitIntoChunks } from "./splitIntoChunks.ts";
 
 type UserChannel = {
@@ -36,23 +38,24 @@ type SlackInboundMessage =
 export default class SlackBot {
   private app!: App;
   private botUserId?: string | undefined;
-  private channelAgents = new Map<string, Agent>();
-  private userChannels = new Map<string, UserChannel>();
-  private chatResponses = new Map<string, ChatResponse>();
+  private channelAgents = new EnhancedMap<string, Agent>();
+  private userChannels = new EnhancedMap<string, UserChannel>();
+  private chatResponses = new EnhancedMap<string, ChatResponse>();
   private lastSendTime = 0;
   private sendTimer: NodeJS.Timeout | null = null;
-  private pendingChannelIds = new Set<string>();
+  private pendingChannelIds = new EnhancedSet<string>();
   private isProcessing = false;
-  private messageIdToBotUserId = new Map<string, string>();
-  private activeRequests = new Map<string, { channelId: string; responseSent: boolean }>();
-  private channelListeners = new Set<string>();
+  private messageIdToBotUserId = new EnhancedMap<string, string>();
+  private activeRequests = new EnhancedMap<string, { channelId: string; responseSent: boolean }>();
+  private channelListeners = new EnhancedSet<string>();
 
   constructor(
     private tokenRingApp: TokenRingApp,
     private slackService: SlackService,
     private botName: string,
     private config: ResolvedSlackBotConfig,
-  ) {}
+  ) {
+  }
 
   async start(): Promise<void> {
     this.app = new App(
@@ -106,7 +109,7 @@ export default class SlackBot {
       this.sendTimer = null;
     }
 
-    const channelIds = [...this.pendingChannelIds];
+    const channelIds = this.pendingChannelIds.valuesArray();
     for (const channelId of channelIds) {
       await this.flushBuffer(channelId);
     }
@@ -439,7 +442,7 @@ export default class SlackBot {
     this.isProcessing = true;
 
     try {
-      const channelIds = [...this.pendingChannelIds];
+      const channelIds = this.pendingChannelIds.valuesArray();
       this.pendingChannelIds.clear();
       for (const channelId of channelIds) {
         await this.flushBuffer(channelId);
