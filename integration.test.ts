@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { App } from "@slack/bolt";
-import AgentManagerImpl from "@tokenring-ai/agent/services/AgentManager";
-import createTestingAgent from "@tokenring-ai/agent/test/createTestingAgent.test";
 import type TokenRingApp from "@tokenring-ai/app";
 import createTestingApp from "@tokenring-ai/app/test/createTestingApp.test";
+import type { IncomingMessage } from "@tokenring-ai/bot";
+import { BotService } from "@tokenring-ai/bot";
 import SlackService from "./SlackService";
 import type { ResolvedSlackServiceConfig } from "./schema";
 
@@ -12,23 +12,20 @@ void mock.module("@tokenring-ai/utility/promise/waitForAbort", () => ({
   default: (...args: any[]) => mockWaitForAbort(...args),
 }));
 
-// Replace the App import with proper mocking
+/** Handlers the service registers with bolt, so tests can feed events in. */
+let messageHandler: (args: any) => Promise<void>;
+
 void mock.module("@slack/bolt", () => {
   const mockClient: any = {
     auth: {
-      test: mock().mockResolvedValue({
-        user_id: "UBOT123",
-        user: "test-bot",
-        team_id: "T123",
-      }),
+      test: mock().mockResolvedValue({ user_id: "UBOT123", user: "test-bot", team_id: "T123" }),
     },
     chat: {
-      postMessage: mock().mockResolvedValue({
-        channel: "C123",
-        ts: "1234567890.123456",
-        ok: true,
-      }),
+      postMessage: mock().mockResolvedValue({ channel: "C123", ts: "1234567890.123456", ok: true }),
       update: mock().mockResolvedValue({ ok: true, ts: "1234567890.123456" }),
+    },
+    conversations: {
+      open: mock().mockResolvedValue({ channel: { id: "D999" }, ok: true }),
     },
   };
 
@@ -36,7 +33,9 @@ void mock.module("@slack/bolt", () => {
     App: mock().mockImplementation(() => ({
       command: mock(),
       event: mock(),
-      message: mock(),
+      message: mock().mockImplementation((handler: (args: any) => Promise<void>) => {
+        messageHandler = handler;
+      }),
       start: mock().mockResolvedValue(undefined),
       stop: mock().mockResolvedValue(undefined),
       client: mockClient,
@@ -44,380 +43,121 @@ void mock.module("@slack/bolt", () => {
   };
 });
 
-describe("Slack Integration Tests", () => {
-  let mockApp: TokenRingApp;
-  let slackService: SlackService;
-
-  const mockConfig: ResolvedSlackServiceConfig = {
-    bots: {
-      "test-bot": {
-        name: "test-bot",
-        botToken: "xoxb-test-token",
-        signingSecret: "test-signing-secret",
-        appToken: "xapp-test-token",
-        channels: {
-          engineering: {
-            channelId: "C1234567890",
-            allowedUsers: ["U06T1LWJG", "UABCDEF123"],
-            agentType: "leader",
-          },
-        },
-        dmAgentType: "leader",
-        dmAllowedUsers: ["U06T1LWJG"],
-        maxFileSize: 20_971_520,
-      },
+const config: ResolvedSlackServiceConfig = {
+  accounts: {
+    workspace: {
+      botToken: "xoxb-test-token",
+      signingSecret: "test-signing-secret",
+      appToken: "xapp-test-token",
+      maxFileSize: 20_971_520,
     },
-  };
+  },
+};
+
+describe("Slack Integration Tests", () => {
+  let app: TokenRingApp;
+  let botService: BotService;
+  let slackService: SlackService;
 
   beforeEach(() => {
     mock.clearAllMocks();
 
-    mockApp = createTestingApp();
-    const agentManager = new AgentManagerImpl(mockApp);
-    mockApp.addServices(agentManager);
+    app = createTestingApp();
+    botService = new BotService(app);
+    app.addServices(botService);
 
-    // Spy on spawnAgent and return a testing agent
-    spyOn(agentManager, "spawnAgent").mockImplementation(_config => {
-      const agent = createTestingAgent(mockApp);
-      spyOn(agent, "handleInput").mockReturnValue("request-1" as any);
-      spyOn(agent, "subscribeState").mockReturnValue(mock());
-      spyOn(agent, "waitForState").mockResolvedValue({
-        getEventCursorFromCurrentPosition: mock().mockReturnValue({}),
-        yieldEventsByCursor: mock().mockReturnValue([]),
-      } as any);
-      return agent;
-    });
-
-    slackService = new SlackService(mockApp, mockConfig);
+    slackService = new SlackService(app, config);
   });
 
-  afterEach(() => {});
+  it("connects each configured account with its credentials", async () => {
+    await slackService.run({ aborted: false } as AbortSignal);
 
-  describe("service initialization", () => {
-    it("should initialize SlackService with valid config", () => {
-      expect(slackService).toBeDefined();
-      expect(slackService.name).toBe("SlackService");
-      expect(slackService.description).toBe("Manages multiple Slack bots for interacting with TokenRing agents.");
+    expect(App).toHaveBeenCalledWith({
+      token: "xoxb-test-token",
+      signingSecret: "test-signing-secret",
+      socketMode: true,
+      appToken: "xapp-test-token",
     });
-
-    it("should create Slack Bot with correct configuration", async () => {
-      const mockAbortSignal = { aborted: false } as AbortSignal;
-      await slackService.run(mockAbortSignal);
-
-      expect(App).toHaveBeenCalledWith({
-        token: "xoxb-test-token",
-        signingSecret: "test-signing-secret",
-        socketMode: true,
-        appToken: "xapp-test-token",
-      });
-
-      const mockSlackApp = (App as any).mock.results[0].value;
-      expect(mockSlackApp.start).toHaveBeenCalled();
-    });
-
-    it("should handle minimal bot configuration", () => {
-      const minimalConfig: ResolvedSlackServiceConfig = {
-        bots: {
-          "minimal-bot": {
-            name: "minimal-bot",
-            botToken: "xoxb-minimal",
-            signingSecret: "minimal-secret",
-            maxFileSize: 20_971_520,
-            channels: {},
-            dmAllowedUsers: [],
-          },
-        },
-      };
-
-      const minimalService = new SlackService(mockApp, minimalConfig);
-      expect(minimalService).toBeDefined();
-      expect(minimalService.name).toBe("SlackService");
-    });
+    expect((App as any).mock.results[0].value.start).toHaveBeenCalled();
+    expect(slackService.getAvailableAccounts()).toEqual(["workspace"]);
   });
 
-  describe("configuration integration", () => {
-    it("should handle different bot configurations", () => {
-      // Test with full config
-      const fullService = new SlackService(mockApp, mockConfig);
-      expect(fullService).toBeDefined();
+  it("registers each account with the bot service under its own name", async () => {
+    await slackService.run({ aborted: false } as AbortSignal);
 
-      // Test with multiple bots
-      const multiBotConfig: ResolvedSlackServiceConfig = {
-        bots: {
-          bot1: {
-            name: "bot1",
-            botToken: "xoxb-bot1",
-            signingSecret: "secret1",
-            maxFileSize: 20_971_520,
-            channels: {
-              channel1: {
-                channelId: "C111",
-                allowedUsers: [],
-                agentType: "leader",
-              },
-            },
-            dmAllowedUsers: [],
-          },
-          bot2: {
-            name: "bot2",
-            botToken: "xoxb-bot2",
-            signingSecret: "secret2",
-            maxFileSize: 20_971_520,
-            channels: {
-              channel2: {
-                channelId: "C222",
-                allowedUsers: ["U123"],
-                agentType: "researcher",
-              },
-            },
-            dmAllowedUsers: [],
-          },
-        },
-      };
-
-      const multiService = new SlackService(mockApp, multiBotConfig);
-      expect(multiService).toBeDefined();
-    });
-
-    it("should handle empty channels configuration", () => {
-      const emptyChannelsConfig: ResolvedSlackServiceConfig = {
-        bots: {
-          "empty-bot": {
-            name: "empty-bot",
-            botToken: "xoxb-empty",
-            signingSecret: "empty-secret",
-            maxFileSize: 20_971_520,
-            channels: {},
-            dmAgentType: "leader",
-            dmAllowedUsers: [],
-          },
-        },
-      };
-
-      const emptyService = new SlackService(mockApp, emptyChannelsConfig);
-      expect(emptyService).toBeDefined();
-    });
+    expect(botService.getProviderNames()).toEqual(["workspace"]);
   });
 
-  describe("bot management integration", () => {
-    it("should manage multiple bots correctly", async () => {
-      const multiBotConfig: ResolvedSlackServiceConfig = {
-        bots: {
-          bot1: {
-            name: "bot1",
-            botToken: "xoxb-bot1",
-            signingSecret: "secret1",
-            maxFileSize: 20_971_520,
-            channels: {
-              channel1: {
-                channelId: "C111",
-                allowedUsers: [],
-                agentType: "leader",
-              },
-            },
-            dmAllowedUsers: [],
-          },
-          bot2: {
-            name: "bot2",
-            botToken: "xoxb-bot2",
-            signingSecret: "secret2",
-            maxFileSize: 20_971_520,
-            channels: {
-              channel2: {
-                channelId: "C222",
-                allowedUsers: [],
-                agentType: "researcher",
-              },
-            },
-            dmAllowedUsers: [],
-          },
-        },
-      };
+  it("disconnects and deregisters accounts on shutdown", async () => {
+    await slackService.run({ aborted: false } as AbortSignal);
 
-      const multiService = new SlackService(mockApp, multiBotConfig);
-      const mockAbortSignal = { aborted: false } as AbortSignal;
-      await multiService.run(mockAbortSignal);
+    const abortCallback = mockWaitForAbort.mock.calls[0]?.[1];
+    await abortCallback!();
 
-      // Get available bots
-      const availableBots = multiService.getAvailableBots();
-      expect(availableBots).toEqual(["bot1", "bot2"]);
-
-      // Get specific bots
-      const bot1 = multiService.getBot("bot1");
-      const bot2 = multiService.getBot("bot2");
-      expect(bot1).toBeDefined();
-      expect(bot2).toBeDefined();
-
-      // Get non-existent bot
-      const nonExistent = multiService.getBot("non-existent");
-      expect(nonExistent).toBeUndefined();
-    });
-
-    it("should handle bot lifecycle properly", async () => {
-      const mockAbortSignal = { aborted: false } as AbortSignal;
-      await slackService.run(mockAbortSignal);
-
-      // Verify bot was started
-      const mockSlackApp = (App as any).mock.results[0].value;
-      expect(mockSlackApp.start).toHaveBeenCalled();
-
-      // Simulate shutdown - get the callback passed to waitForAbort
-      const abortCallback = mockWaitForAbort.mock.calls[0]?.[1];
-
-      await abortCallback!({} as any);
-
-      expect(mockSlackApp.stop).toHaveBeenCalled();
-    });
+    expect((App as any).mock.results[0].value.stop).toHaveBeenCalled();
+    expect(botService.getProviderNames()).toEqual([]);
+    expect(slackService.getAvailableAccounts()).toEqual([]);
   });
 
-  describe("error handling integration", () => {
-    it("should handle auth failures gracefully", async () => {
-      // Create a new mock app for this test
-      const failingApp = createTestingApp();
-      const agentManager = new AgentManagerImpl(failingApp);
-      failingApp.addServices(agentManager);
+  describe("inbound messages", () => {
+    let received: IncomingMessage[];
 
-      // Mock spawnAgent to return a testing agent
-      spyOn(agentManager, "spawnAgent").mockImplementation(_config => {
-        const agent = createTestingAgent(failingApp);
-        spyOn(agent, "handleInput").mockReturnValue("request-1" as any);
-        spyOn(agent, "subscribeState").mockReturnValue(mock());
-        spyOn(agent, "waitForState").mockResolvedValue({
-          getEventCursorFromCurrentPosition: mock().mockReturnValue({}),
-          yieldEventsByCursor: mock().mockReturnValue([]),
-        } as any);
-        return agent;
-      });
-
-      const failingConfig: ResolvedSlackServiceConfig = {
-        bots: {
-          "failing-bot": {
-            name: "failing-bot",
-            botToken: "xoxb-failing",
-            signingSecret: "failing-secret",
-            maxFileSize: 20_971_520,
-            channels: {},
-            dmAllowedUsers: [],
-          },
-        },
-      };
-
-      // Mock auth.test to fail for this specific test
-      const mockClient: any = {
-        auth: {
-          test: mock().mockRejectedValue(new Error("Invalid token")),
-        },
-        chat: {
-          postMessage: mock(),
-          update: mock(),
-        },
-      };
-
-      (App as any).mockImplementation(() => ({
-        command: mock(),
-        event: mock(),
-        message: mock(),
-        start: mock().mockImplementation(async () => {
-          await mockClient.auth.test();
-        }),
-        stop: mock().mockResolvedValue(undefined),
-        client: mockClient,
-      }));
-
-      const failingService = new SlackService(failingApp, failingConfig);
-      const mockAbortSignal = { aborted: false } as AbortSignal;
-
-      // Starting should fail due to auth
-      expect(failingService.run(mockAbortSignal)).rejects.toThrow("Invalid token");
-
-      // Restore the default mock
-      (App as any).mockImplementation(() => {
-        const defaultMockClient: any = {
-          auth: {
-            test: mock().mockResolvedValue({
-              user_id: "UBOT123",
-              user: "test-bot",
-              team_id: "T123",
-            }),
-          },
-          chat: {
-            postMessage: mock().mockResolvedValue({
-              channel: "C123",
-              ts: "1234567890.123456",
-              ok: true,
-            }),
-            update: mock().mockResolvedValue({ ok: true, ts: "1234567890.123456" }),
-          },
-        };
-        return {
-          command: mock(),
-          event: mock(),
-          message: mock(),
-          start: mock().mockResolvedValue(undefined),
-          stop: mock().mockResolvedValue(undefined),
-          client: defaultMockClient,
-        };
+    beforeEach(async () => {
+      await slackService.run({ aborted: false } as AbortSignal);
+      received = [];
+      slackService.getProvider("workspace")!.onMessage(message => {
+        received.push(message);
       });
     });
-  });
 
-  describe("service lifecycle integration", () => {
-    it("should handle service startup and shutdown", async () => {
-      const mockAbortSignal = { aborted: false } as AbortSignal;
+    it("normalizes a channel mention, stripping the mention from the text", async () => {
+      await messageHandler({ message: { type: "message", user: "U123", channel: "C123", ts: "1.1", text: "<@UBOT123> deploy please" } });
 
-      // Start service
-      await slackService.run(mockAbortSignal);
-      const mockSlackApp = (App as any).mock.results[0].value;
-      expect(mockSlackApp.start).toHaveBeenCalled();
-
-      // Simulate shutdown
-      const abortCallback = mockWaitForAbort.mock.calls[0]?.[1];
-
-      await abortCallback!({} as any);
-
-      expect(mockSlackApp.stop).toHaveBeenCalled();
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({
+        conversationId: "C123",
+        userId: "U123",
+        text: "deploy please",
+        direct: false,
+        addressed: true,
+      });
     });
 
-    it("should handle multiple service instances", async () => {
-      const mockAbortSignal = { aborted: false } as AbortSignal;
+    it("marks messages in a DM channel as direct", async () => {
+      await messageHandler({ message: { type: "message", user: "U123", channel: "D123", ts: "1.1", text: "hello" } });
 
-      // First service
-      await slackService.run(mockAbortSignal);
-      expect(App).toHaveBeenCalledTimes(1);
+      expect(received[0]).toMatchObject({ direct: true, addressed: true });
+    });
 
-      // Second service
-      const secondService = new SlackService(mockApp, mockConfig);
-      await secondService.run(mockAbortSignal);
-      expect(App).toHaveBeenCalledTimes(2);
+    it("does not treat an unaddressed channel message as addressed", async () => {
+      await messageHandler({ message: { type: "message", user: "U123", channel: "C123", ts: "1.1", text: "chatting amongst ourselves" } });
 
-      // Services should be independent
-      expect(slackService).not.toBe(secondService);
+      expect(received[0]).toMatchObject({ addressed: false });
+    });
+
+    it("ignores messages the bot itself posted", async () => {
+      await messageHandler({ message: { type: "message", bot_id: "B1", user: "UBOT123", channel: "C123", ts: "1.1", text: "hi" } });
+
+      expect(received).toEqual([]);
     });
   });
 
-  describe("SlackBot integration", () => {
-    it("should create SlackBot with correct parameters", async () => {
-      const mockAbortSignal = { aborted: false } as AbortSignal;
-      await slackService.run(mockAbortSignal);
-
-      // Get the bot
-      const bot = slackService.getBot("test-bot");
-      expect(bot).toBeDefined();
-      expect(bot!.getBotUserId()).toBe("UBOT123");
+  describe("outbound messages", () => {
+    beforeEach(async () => {
+      await slackService.run({ aborted: false } as AbortSignal);
     });
 
-    it("should handle bot stop operation", async () => {
-      const mockAbortSignal = { aborted: false } as AbortSignal;
-      await slackService.run(mockAbortSignal);
+    it("posts to a channel and returns the message timestamp", async () => {
+      const provider = slackService.getProvider("workspace")!;
 
-      const bot = slackService.getBot("test-bot");
-      expect(bot).toBeDefined();
+      await expect(provider.sendMessage("C123", "hello")).resolves.toBe("1234567890.123456");
+    });
 
-      // Stop the bot
-      await bot!.stop();
+    it("opens a DM channel when addressed to a user", async () => {
+      const provider = slackService.getProvider("workspace")!;
 
-      const mockSlackApp = (App as any).mock.results[0].value;
-      expect(mockSlackApp.stop).toHaveBeenCalled();
+      await expect(provider.resolveConversation("U123")).resolves.toBe("D999");
+      await expect(provider.resolveConversation("C123")).resolves.toBe("C123");
     });
   });
 });

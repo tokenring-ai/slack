@@ -1,2 +1,2 @@
-export { default as SlackEscalationProvider } from "./SlackEscalationProvider.ts";
-export { default as SlackBotService } from "./SlackService.ts";
+export { default as SlackMessagingProvider } from "./SlackMessagingProvider.ts";
+export { default as SlackService } from "./SlackService.ts";

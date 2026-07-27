@@ -1,12 +1,12 @@
 {
   "name": "@tokenring-ai/slack",
-  "description": "Bot integration for interacting with agents through Slack.",
+  "description": "Slack transport for TokenRing bots.",
   "version": "0.2.0",
   "dependencies": {
     "@tokenring-ai/app": "workspace:*",
     "@tokenring-ai/agent": "workspace:*",
     "@tokenring-ai/utility": "workspace:*",
-    "@tokenring-ai/escalation": "workspace:*",
+    "@tokenring-ai/bot": "workspace:*",
     "@slack/bolt": "^4.7.3",
     "zod": "^4.4.3",
     "@tokenring-ai/secrets": "workspace:*"

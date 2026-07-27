@@ -1,18 +1,24 @@
 import type TokenRingApp from "@tokenring-ai/app";
 import type { TokenRingService } from "@tokenring-ai/app/types";
+import { BotService } from "@tokenring-ai/bot";
 import waitForAbort from "@tokenring-ai/utility/promise/waitForAbort";
 import KeyedRegistry from "@tokenring-ai/utility/registry/KeyedRegistry";
-import SlackBot from "./SlackBot.ts";
+import SlackMessagingProvider from "./SlackMessagingProvider.ts";
 import type { ResolvedSlackServiceConfig } from "./schema.ts";
 
+/**
+ * Connects the configured Slack apps and registers each one with the bot
+ * service, where it becomes the `slack`-style prefix of a `service:userId`
+ * target.
+ */
 export default class SlackService implements TokenRingService {
   readonly name = "SlackService";
-  description = "Manages multiple Slack bots for interacting with TokenRing agents.";
+  description = "Connects Slack app installations to the bot service.";
 
-  private bots = new KeyedRegistry<SlackBot>();
+  private providers = new KeyedRegistry<SlackMessagingProvider>();
 
-  getAvailableBots = this.bots.keysArray;
-  getBot = this.bots.get;
+  getAvailableAccounts = this.providers.keysArray;
+  getProvider = this.providers.get;
 
   constructor(
     private app: TokenRingApp,
@@ -20,19 +26,23 @@ export default class SlackService implements TokenRingService {
   ) {}
 
   async run(signal: AbortSignal): Promise<void> {
-    this.app.serviceOutput(this, "Starting Slack bots...");
+    const botService = this.app.requireService(BotService);
 
-    for (const [botName, botConfig] of Object.entries(this.options.bots)) {
-      const bot = new SlackBot(this.app, this, botName, botConfig);
-      await bot.start();
+    this.app.serviceOutput(this, "Connecting Slack accounts...");
 
-      this.bots.set(botName, bot);
+    for (const [accountName, accountConfig] of Object.entries(this.options.accounts)) {
+      const provider = new SlackMessagingProvider(this.app, this, accountName, accountConfig);
+      await provider.start();
+
+      this.providers.set(accountName, provider);
+      botService.registerProvider(accountName, provider);
     }
 
     return waitForAbort(signal, async () => {
-      for (const [botName, bot] of this.bots.entriesArray()) {
-        await bot.stop();
-        this.bots.unregister(botName);
+      for (const [accountName, provider] of this.providers.entriesArray()) {
+        botService.unregisterProvider(accountName);
+        await provider.stop();
+        this.providers.unregister(accountName);
       }
     });
   }
