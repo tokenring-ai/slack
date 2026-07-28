@@ -14,13 +14,13 @@ export default {
   displayName: "Slack Integration",
   version: packageJSON.version,
   description: packageJSON.description,
-  install(app, config) {
-    const accounts = Object.entries(config.slack.accounts);
-    if (accounts.length === 0) return;
-
-    // Resolve up front so a misconfigured token fails at boot, not on first message.
+  install(app) {
+    app.addServices(new SlackService(app));
+  },
+  async reconfigure(app, config) {
+    // Resolve up front so a misconfigured token fails at configure, not on first message.
     const resolvedAccounts: Record<string, ResolvedSlackAccountConfig> = {};
-    for (const [accountName, account] of accounts) {
+    for (const [accountName, account] of Object.entries(config.slack.accounts)) {
       const { botToken, signingSecret, appToken: appTokenRef, ...rest } = account;
       const appToken = resolveSecret(app, appTokenRef);
       resolvedAccounts[accountName] = {
@@ -31,7 +31,7 @@ export default {
       };
     }
 
-    app.addServices(new SlackService(app, { accounts: resolvedAccounts }));
+    await app.requireService(SlackService).reconfigure({ accounts: resolvedAccounts });
   },
   configSchema: packageConfigSchema,
 } satisfies TokenRingPlugin<typeof packageConfigSchema>;

@@ -66,12 +66,11 @@ describe("Slack Integration Tests", () => {
     botService = new BotService(app);
     app.addServices(botService);
 
-    slackService = new SlackService(app, config);
+    slackService = new SlackService(app);
+    slackService.reconfigure(config);
   });
 
   it("connects each configured account with its credentials", async () => {
-    await slackService.run({ aborted: false } as AbortSignal);
-
     expect(App).toHaveBeenCalledWith({
       token: "xoxb-test-token",
       signingSecret: "test-signing-secret",
@@ -83,14 +82,10 @@ describe("Slack Integration Tests", () => {
   });
 
   it("registers each account with the bot service under its own name", async () => {
-    await slackService.run({ aborted: false } as AbortSignal);
-
     expect(botService.getProviderNames()).toEqual(["workspace"]);
   });
 
   it("disconnects and deregisters accounts on shutdown", async () => {
-    await slackService.run({ aborted: false } as AbortSignal);
-
     const abortCallback = mockWaitForAbort.mock.calls[0]?.[1];
     await abortCallback!();
 
@@ -103,7 +98,6 @@ describe("Slack Integration Tests", () => {
     let received: IncomingMessage[];
 
     beforeEach(async () => {
-      await slackService.run({ aborted: false } as AbortSignal);
       received = [];
       slackService.getProvider("workspace")!.onMessage(message => {
         received.push(message);
@@ -143,10 +137,6 @@ describe("Slack Integration Tests", () => {
   });
 
   describe("outbound messages", () => {
-    beforeEach(async () => {
-      await slackService.run({ aborted: false } as AbortSignal);
-    });
-
     it("posts to a channel and returns the message timestamp", async () => {
       const provider = slackService.getProvider("workspace")!;
 
