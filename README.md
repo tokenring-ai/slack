@@ -14,7 +14,11 @@ Who a bot talks to, which channels it sits in, and which agent answers are confi
 - **Socket Mode**: no public HTTP endpoint required when an app-level token is configured
 - **Streaming edits**: messages are edited in place as an agent's response grows
 - **DM channels on demand**: a user id is resolved to an IM channel automatically
-- **Attachments**: shared files are fetched and passed to the agent, within a configurable size limit
+- **Attachments**: fetched only once a bot has decided to handle the message, within a configurable size limit, and
+  unsupported file types are declined rather than failing the message
+- **Channel discovery**: being added to a channel is reported to the bot service, which can join a bot to it
+  automatically
+- **Thread-aware**: a question asked in a thread is answered in that thread
 
 ## Installation
 
@@ -22,8 +26,9 @@ Who a bot talks to, which channels it sits in, and which agent answers are confi
 bun add @tokenring-ai/slack
 ```
 
-Create a Slack app with the `app_mentions:read`, `channels:history`, `chat:write`, `files:read`, `im:history`, and
-`im:write` scopes, and enable Socket Mode if you want to run without a public endpoint.
+Create a Slack app with the `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `files:read`,
+`groups:read`, `im:history`, and `im:write` scopes, subscribe it to the `member_joined_channel` and
+`member_left_channel` events, and enable Socket Mode if you want to run without a public endpoint.
 
 ## Configuration
 
@@ -59,6 +64,27 @@ bot:
 ```
 
 Invite the bot to any channel you list, or it will not receive messages there.
+
+### Joining a channel
+
+A Slack app cannot add itself to a channel — a person invites it. When that happens this package reports the channel to
+`@tokenring-ai/bot`, which lists it under "Discovered channels" in `/bots` and on the Bots dashboard. From there:
+
+- run `/bots join helper slack:C0123ABCD`, or click **Join** on the dashboard, or
+- set `joinPolicy` on the bot so it joins by itself when invited — see the `@tokenring-ai/bot` README.
+
+Channel ids are logged when the app is added to a channel or first sees traffic from one, so you can also read one off
+the service log and write it into `channels` by hand.
+
+Discovery needs the `channels:read` and `groups:read` scopes to name a channel, and the `member_joined_channel` and
+`member_left_channel` event subscriptions to hear about invitations at all. Without the read scopes a channel is still
+discovered, just without its name.
+
+### Threads
+
+A bot keeps one agent per channel — Slack threads are too fine-grained to each deserve their own, and splitting on them
+would give a thread hanging off the bot's own answer no memory of the question. A reply that arrives in a thread is
+answered in that thread rather than in the channel.
 
 ### ENV Variables
 
@@ -97,8 +123,14 @@ Implements `MessagingProvider` from `@tokenring-ai/bot` for one app installation
 
 - `maxMessageLength` is 3900, under Slack's 4000 character limit
 - `resolveConversation` opens an IM channel for user ids (`U…`/`W…`) and passes channel ids through unchanged
+- `sendMessage` posts to a channel, and into a thread when given a `replyToMessageId`
 - `updateMessage` edits in place, posting a fresh message if the original has gone
-- inbound messages are marked `addressed` when they are a DM, mention the bot, or reply in a thread the bot started
+- inbound messages are marked `addressed` when they are a DM, mention the bot, or reply in a thread the bot started.
+  Only the bot's own `<@…>` mention is stripped from the text — the others name people the agent was asked about
+- `attachments` is a fetcher, not a list: nothing is downloaded until a bot claims the message
+- `onMembershipChange` reports `member_joined_channel` / `member_left_channel` for the app itself as `via: "invite"`,
+  and the first message out of a channel the app was already in as `via: "observed"` — the latter never triggers an
+  automatic join
 
 ### Package Structure
 

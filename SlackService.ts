@@ -1,8 +1,8 @@
 import type TokenRingApp from "@tokenring-ai/app";
-import type { TokenRingService } from "@tokenring-ai/app/types";
+import { ConfigurationError, type TokenRingService } from "@tokenring-ai/app/types";
 import { BotService } from "@tokenring-ai/bot";
-import { deepEqual } from "@tokenring-ai/one-frontend/src/lib/utils";
 import KeyedRegistry from "@tokenring-ai/utility/registry/KeyedRegistry";
+import { deepEquals } from "bun";
 import SlackMessagingProvider from "./SlackMessagingProvider.ts";
 import type { ResolvedSlackServiceConfig } from "./schema.ts";
 
@@ -24,30 +24,33 @@ export default class SlackService implements TokenRingService {
   constructor(private app: TokenRingApp) {}
 
   async reconfigure(options: ResolvedSlackServiceConfig): Promise<void> {
-    const botService = this.app.requireService(BotService);
+    const botService = this.requireBotService();
 
-    this.app.serviceOutput(this, "Connecting Slack accounts...");
-
-    await this.providers.reconcileAgainstAsync(this.options.accounts, {
+    // Reconcile the live providers against the *incoming* accounts; `this.options`
+    // is the previous snapshot, used below only to spot which ones actually changed.
+    await this.providers.reconcileAgainstAsync(options.accounts, {
       creating: async (accountName, accountConfig) => {
+        this.app.serviceOutput(this, `Connecting Slack account ${accountName}`);
         const provider = new SlackMessagingProvider(this.app, this, accountName, accountConfig);
         await provider.start();
         botService.registerProvider(accountName, provider);
         return provider;
       },
       deleting: async (accountName, provider) => {
+        this.app.serviceOutput(this, `Stopping Slack account ${accountName}`);
         botService.unregisterProvider(accountName);
         await provider.stop();
       },
       updating: async (accountName, provider, accountConfig) => {
-        if (deepEqual(this.options.accounts[accountName], accountConfig)) return provider;
+        if (deepEquals(this.options.accounts[accountName], accountConfig, true)) return provider;
+
+        this.app.serviceOutput(this, `Reconnecting Slack account ${accountName}`);
         botService.unregisterProvider(accountName);
         await provider.stop();
 
         const next = new SlackMessagingProvider(this.app, this, accountName, accountConfig);
         await next.start();
         botService.registerProvider(accountName, next);
-        this.providers.set(accountName, next);
 
         return next;
       },
@@ -56,11 +59,22 @@ export default class SlackService implements TokenRingService {
   }
 
   async stop(): Promise<void> {
-    const botService = this.app.requireService(BotService);
+    const botService = this.app.getService(BotService);
     for (const [accountName, provider] of this.providers.entriesArray()) {
-      botService.unregisterProvider(accountName);
+      botService?.unregisterProvider(accountName);
       await provider.stop();
       this.providers.unregister(accountName);
     }
+  }
+
+  private requireBotService(): BotService {
+    const botService = this.app.getService(BotService);
+    if (!botService) {
+      throw new ConfigurationError(
+        this.name,
+        "Slack accounts are configured but the @tokenring-ai/bot plugin is not installed, so there is nothing to connect them to",
+      );
+    }
+    return botService;
   }
 }
