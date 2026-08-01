@@ -40,11 +40,7 @@ export default {
   alias: "slack connect",
   description: "Connects a Slack app installation",
   inputSchema,
-  execute: async ({
-    agent,
-    positionals: { botToken, signingSecret, appToken },
-    args: { name, save },
-  }: AgentCommandInputType<typeof inputSchema>): Promise<string> => {
+  execute: async ({ agent, args: { botToken, signingSecret, appToken, name, save } }: AgentCommandInputType<typeof inputSchema>): Promise<string> => {
     if (!agent.headless) {
       botToken ??=
         (await agent.askForText({
@@ -70,7 +66,7 @@ export default {
       throw new CommandFailedError("Usage: /connect slack <botToken> <signingSecret> [appToken]");
     }
 
-    const configService = agent.requireServiceByType(ConfigurationService);
+    const configService = agent.requireService(ConfigurationService);
     const overrides = configService.getOverrides(save);
     const slack = (overrides.slack ?? {}) as { accounts?: Record<string, unknown> };
     const accounts = slack.accounts ?? {};

@@ -64,7 +64,7 @@ describe("Slack Integration Tests", () => {
 
     app = createTestingApp();
     botService = new BotService(app);
-    app.addServices(botService);
+    app.addService(botService);
 
     slackService = new SlackService(app);
     await slackService.reconfigure(config);
