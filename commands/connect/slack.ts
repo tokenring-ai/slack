@@ -12,8 +12,8 @@ const inputSchema = {
     save: {
       description: "Where to save the Slack account configuration",
       type: "enum",
-      values: ["user", "project"],
-      defaultValue: "user",
+      values: ["global", "workspace"],
+      defaultValue: "workspace",
     },
   },
   positionals: [
