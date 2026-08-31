@@ -42,12 +42,12 @@ slack:
       maxFileSize: 20971520
 ```
 
-| Option          | Type     | Default      | Description                                             |
-|-----------------|----------|--------------|---------------------------------------------------------|
-| `botToken`      | `secret` | required     | Bot OAuth token (`xoxb-...`)                            |
-| `signingSecret` | `secret` | required     | Request signing secret                                  |
-| `appToken`      | `secret` | —            | App-level token (`xapp-...`); enables Socket Mode       |
-| `maxFileSize`   | `number` | `20971520`   | Largest file, in bytes, fetched from Slack              |
+| Field            | Type     | Required | Default    | Description                                                        |
+|------------------|----------|----------|------------|--------------------------------------------------------------------|
+| `botToken`       | `secret` | Yes      | —          | Slack bot OAuth token (xoxb-...)                                   |
+| `appToken`       | `secret` | No       | —          | Slack app-level token for Socket Mode (xapp-...)                   |
+| `signingSecret`  | `secret` | Yes      | —          | Slack request signing secret                                       |
+| `maxFileSize`    | `number` | No       | `20971520` | Largest file, in bytes, fetched from Slack                         |
 
 Then point a bot at it:
 
@@ -64,6 +64,14 @@ bot:
 ```
 
 Invite the bot to any channel you list, or it will not receive messages there.
+
+### Schema Metadata
+
+| Field         | Meta                                                                                  |
+|---------------|---------------------------------------------------------------------------------------|
+| `slack`       | `label: "Slack"`, `description: "Slack app installations"`                            |
+| `accounts`    | `label: "Accounts"`, `description: "Slack app installations, keyed by the service name bots address them by"` |
+| `maxFileSize` | `advanced: true`, `description: "Largest file, in bytes, fetched from Slack"`         |
 
 ### Joining a channel
 
@@ -93,7 +101,31 @@ This package does not read environment variables directly — point the secrets 
 
 ## Chat Commands
 
-This package does not define any chat commands. See `@tokenring-ai/bot` for `/message` and `/bots`.
+| Command          | Alias            | Description                     |
+|------------------|------------------|---------------------------------|
+| `connect slack`  | `slack connect`  | Connects a Slack app installation |
+
+Connects a Slack app installation and saves its credentials in the configuration. When run interactively, credentials
+are requested using masked prompts. The app-level token is optional and enables Socket Mode.
+
+**Arguments:**
+
+| Argument   | Type                           | Default     | Description                                       |
+|------------|--------------------------------|-------------|---------------------------------------------------|
+| `name`     | `string`                       | `slack`     | The name to save the Slack account under           |
+| `save`     | `enum: "global" \| "workspace"` | `workspace` | Where to save the Slack account configuration      |
+
+**Positionals:**
+
+| Positional       | Required | Description                                       |
+|------------------|----------|---------------------------------------------------|
+| `botToken`       | No       | The Slack bot OAuth token (xoxb-...)               |
+| `signingSecret`  | No       | The Slack app signing secret                       |
+| `appToken`       | No       | The Slack app-level token for Socket Mode (xapp-...) |
+
+```text
+/connect slack --name=slack
+```
 
 ## Tools
 
@@ -101,7 +133,7 @@ This package does not define any tools.
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License — see LICENSE file for details.
 
 ---
 
@@ -110,27 +142,81 @@ MIT License - see LICENSE file for details.
 ### SlackService
 
 Connects every configured account at startup and registers each one with `BotService` under its account name.
-Disconnects and deregisters them on shutdown.
+Disconnects and deregisters them on shutdown. Reconciliation is driven by `reconfigure`, which creates, updates, and
+deletes providers against the incoming account map.
 
-| Method                    | Description                          |
-|---------------------------|--------------------------------------|
-| `getAvailableAccounts()`  | Names of the connected accounts      |
-| `getProvider(name)`       | The provider for an account          |
+#### State properties
+
+| Property       | Type             | Description                                                 |
+|----------------|------------------|-------------------------------------------------------------|
+| `name`         | `string`         | `"SlackService"`                                            |
+| `description`  | `string`         | `"Connects Slack app installations to the bot service."`    |
+
+#### SlackService methods
+
+| Method                                            | Description                                                                                     |
+|---------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| `getAvailableAccounts(): string[]`                | Names of the connected accounts                                                                 |
+| `getProvider(name: string): SlackMessagingProvider \| undefined` | The provider for an account                                                       |
+| `reconfigure(options: ResolvedSlackServiceConfig): Promise<void>` | Reconciles live providers against incoming accounts — creates, updates, or deletes each one |
+| `stop(): Promise<void>`                           | Disconnects and deregisters every account from `BotService`                                    |
 
 ### SlackMessagingProvider
 
-Implements `MessagingProvider` from `@tokenring-ai/bot` for one app installation:
+Implements `MessagingProvider` from `@tokenring-ai/bot` for one Slack app installation.
 
-- `maxMessageLength` is 3900, under Slack's 4000 character limit
-- `resolveConversation` opens an IM channel for user ids (`U…`/`W…`) and passes channel ids through unchanged
-- `sendMessage` posts to a channel, and into a thread when given a `replyToMessageId`
-- `updateMessage` edits in place, posting a fresh message if the original has gone
-- inbound messages are marked `addressed` when they are a DM, mention the bot, or reply in a thread the bot started.
-  Only the bot's own `<@…>` mention is stripped from the text — the others name people the agent was asked about
-- `attachments` is a fetcher, not a list: nothing is downloaded until a bot claims the message
-- `onMembershipChange` reports `member_joined_channel` / `member_left_channel` for the app itself as `via: "invite"`,
-  and the first message out of a channel the app was already in as `via: "observed"` — the latter never triggers an
-  automatic join
+#### Properties
+
+| Property             | Type     | Description                                                      |
+|----------------------|----------|------------------------------------------------------------------|
+| `maxMessageLength`   | `number` | `3900`, under Slack's 4000 character limit                       |
+| `accountName`        | `string` | The service name this provider is registered under               |
+
+#### SlackMessagingProvider methods
+
+| Method                                                                 | Description                                                                                                                                    |
+|------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| `start(): Promise<void>`                                               | Creates the Bolt `App`, resolves the bot user id, registers event handlers, and starts the connection                                          |
+| `stop(): Promise<void>`                                                | Clears all handlers and own-message tracking, then stops the Bolt `App`                                                                        |
+| `onMessage(handler: IncomingMessageHandler): void`                     | Registers a handler called for every inbound message                                                                                           |
+| `onMembershipChange(handler: MembershipHandler): void`                 | Registers a handler called when the app itself joins or leaves a channel                                                                       |
+| `resolveConversation(targetId: string): Promise<string>`               | Opens an IM channel for user ids (`U…`/`W…`) and passes channel ids through unchanged                                                          |
+| `sendMessage(conversationId: string, text: string, options?: SendOptions): Promise<string>` | Posts to a channel, and into a thread when given a `replyToMessageId`. Returns the message timestamp                                     |
+| `updateMessage(conversationId: string, messageId: string, text: string): Promise<string>` | Edits a message in place, posting a fresh message if the original has gone (`message_not_found`). Returns the (possibly new) message id  |
+
+#### Inbound message handling
+
+Inbound messages are marked `addressed` when they are a DM, mention the bot, or reply in a thread the bot started.
+Only the bot's own `<@…>` mention is stripped from the text — the others name people the agent was asked about.
+
+`attachments` is a fetcher, not a list: nothing is downloaded until a bot claims the message. Files exceeding
+`maxFileSize` are skipped, and unsupported MIME types are declined rather than throwing.
+
+`onMembershipChange` reports `member_joined_channel` / `member_left_channel` for the app itself as `via: "invite"`,
+and the first message out of a channel the app was already in as `via: "observed"` — the latter never triggers an
+automatic join.
+
+### Plugin lifecycle
+
+| Property        | Value                              |
+|-----------------|------------------------------------|
+| `name`          | `@tokenring-ai/slack`              |
+| `displayName`   | `Slack Integration`                |
+| `version`       | `0.2.0`                            |
+| `description`   | `Slack transport for TokenRing bots.` |
+| `configSchema`  | `z.object({ slack: SlackServiceConfigSchema.prefault({ accounts: {} }) })` |
+
+**`install(app)`:**
+
+1. Adds a `SlackService` to the app.
+2. Registers the `connect slack` agent command with `AgentCommandService` once that service is available.
+
+**`reconfigure(app, config)`:**
+
+1. Resolves secrets for every configured account — `botToken` and `signingSecret` are required (via `requireSecret`),
+   `appToken` is optional (via `resolveSecret`). A misconfigured token fails here, not on first message.
+2. Calls `SlackService.reconfigure({ accounts: resolvedAccounts })`, which reconciles live providers against the
+   incoming accounts.
 
 ### Package Structure
 
@@ -141,22 +227,34 @@ plugin/slack/
 ├── SlackService.ts             # Connects accounts, registers them with BotService
 ├── SlackMessagingProvider.ts   # The Slack transport
 ├── schema.ts                   # Configuration schemas
+├── commands.ts                 # Agent command registry
+├── commands/
+│   └── connect/
+│       └── slack.ts            # `/connect slack` command
 ├── integration.test.ts         # Service and transport tests
+├── bun.config.ts               # Test runner configuration
+├── package.json                # Package manifest
 └── LICENSE                     # MIT License
 ```
 
 ### Dependencies
 
-| Package                 | Description                       |
-|-------------------------|-----------------------------------|
-| `@tokenring-ai/bot`     | Bot service and provider contract |
-| `@tokenring-ai/agent`   | Attachment types                  |
-| `@tokenring-ai/app`     | Application framework             |
-| `@tokenring-ai/secrets` | Secret resolution                 |
-| `@slack/bolt`           | Slack app framework               |
+| Package                   | Description                                   |
+|---------------------------|-----------------------------------------------|
+| `@tokenring-ai/bot`       | Bot service and provider contract              |
+| `@tokenring-ai/agent`     | Attachment types and agent command types       |
+| `@tokenring-ai/app`       | Application framework                          |
+| `@tokenring-ai/secrets`   | Secret resolution                              |
+| `@tokenring-ai/utility`   | `KeyedRegistry` for provider management        |
+| `@slack/bolt`             | Slack app framework                            |
+| `zod`                     | Schema validation                              |
 
 ### Testing
 
 ```bash
 bun test
 ```
+
+The test suite (`integration.test.ts`) mocks the `@slack/bolt` `App` and covers account connection and registration,
+inbound message normalization (mention stripping, DM detection, thread tracking), channel membership events
+(invite, leave, first-sight observation), and outbound message posting and DM resolution.
