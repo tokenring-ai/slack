@@ -7,8 +7,8 @@
     "@tokenring-ai/agent": "workspace:*",
     "@tokenring-ai/utility": "workspace:*",
     "@tokenring-ai/bot": "workspace:*",
-    "@slack/bolt": "^4.7.3",
-    "zod": "^4.4.3",
+    "@slack/bolt": "^5.1.0",
+    "zod": "^4.6.7",
     "@tokenring-ai/secrets": "workspace:*"
   },
   "exports": {
