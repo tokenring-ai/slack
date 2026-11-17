@@ -105,8 +105,11 @@ This package does not read environment variables directly — point the secrets 
 |------------------|------------------|---------------------------------|
 | `connect slack`  | `slack connect`  | Connects a Slack app installation |
 
-Connects a Slack app installation and saves its credentials in the configuration. When run interactively, credentials
-are requested using masked prompts. The app-level token is optional and enables Socket Mode.
+Connects a Slack app installation. The credentials are saved in the vault (category `slack`, keys `<name>.botToken`,
+`<name>.signingSecret`, `<name>.appToken`) and the configuration only holds `{ source: vault, ... }` references to them,
+so the vault must be unlocked. When run interactively, credentials are requested using masked prompts; passing them as
+positionals also works (where nobody can answer a prompt) but leaves them in the chat history. The app-level token is optional and
+enables Socket Mode.
 
 **Arguments:**
 

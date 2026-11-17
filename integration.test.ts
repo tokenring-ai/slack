@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { App } from "@slack/bolt";
 import type TokenRingApp from "@tokenring-ai/app";
 import createTestingApp from "@tokenring-ai/app/test/createTestingApp.test";
@@ -219,6 +219,143 @@ describe("Slack Integration Tests", () => {
 
       await expect(provider.resolveConversation("U123")).resolves.toBe("D999");
       await expect(provider.resolveConversation("C123")).resolves.toBe("C123");
+    });
+  });
+  describe("redelivery", () => {
+    it("handles a channel mention once though it arrives as both a message and an app_mention", async () => {
+      const received: IncomingMessage[] = [];
+      slackService.getProvider("workspace")!.onMessage(message => {
+        received.push(message);
+      });
+      const event = { user: "U123", channel: "C123", ts: "5.5", text: "<@UBOT123> deploy please" };
+
+      await Promise.all([messageHandler({ message: { type: "message", ...event } }), eventHandlers.app_mention!({ event: { type: "app_mention", ...event } })]);
+      // Socket Mode redelivery of the same event later is dropped too.
+      await messageHandler({ message: { type: "message", ...event } });
+
+      expect(received).toHaveLength(1);
+    });
+
+    it("still handles the same ts in a different channel", async () => {
+      const received: IncomingMessage[] = [];
+      slackService.getProvider("workspace")!.onMessage(message => {
+        received.push(message);
+      });
+
+      await messageHandler({ message: { type: "message", user: "U123", channel: "C123", ts: "5.5", text: "a" } });
+      await messageHandler({ message: { type: "message", user: "U123", channel: "C456", ts: "5.5", text: "b" } });
+
+      expect(received).toHaveLength(2);
+    });
+  });
+
+  describe("edit fallback", () => {
+    it("re-posts into the thread when the message being edited is gone", async () => {
+      const provider = slackService.getProvider("workspace")!;
+      const client = (App as any).mock.results[0].value.client;
+
+      const ts = await provider.sendMessage("C123", "partial", { replyToMessageId: "1.1" });
+      client.chat.update.mockRejectedValueOnce(new Error("An API error occurred: message_not_found"));
+      await provider.updateMessage("C123", ts, "partial and more");
+
+      expect(client.chat.postMessage).toHaveBeenLastCalledWith({ channel: "C123", text: "partial and more", thread_ts: "1.1" });
+    });
+
+    it("re-posts to the channel root when the lost message was not threaded", async () => {
+      const provider = slackService.getProvider("workspace")!;
+      const client = (App as any).mock.results[0].value.client;
+
+      const ts = await provider.sendMessage("C123", "partial");
+      client.chat.update.mockRejectedValueOnce(new Error("An API error occurred: message_not_found"));
+      await provider.updateMessage("C123", ts, "partial and more");
+
+      expect(client.chat.postMessage).toHaveBeenLastCalledWith({ channel: "C123", text: "partial and more" });
+    });
+  });
+
+  describe("attachment size", () => {
+    let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
+
+    afterEach(() => {
+      fetchSpy?.mockRestore();
+    });
+
+    async function attachmentsFor(body: ReadableStream<Uint8Array>, headers: Record<string, string> = {}) {
+      await slackService.reconfigure({ accounts: { workspace: { ...config.accounts.workspace!, maxFileSize: 10 } } });
+      const received: IncomingMessage[] = [];
+      slackService.getProvider("workspace")!.onMessage(message => {
+        received.push(message);
+      });
+      fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(new Response(body, { headers }));
+
+      // No `size`: the declared size cannot be relied on to enforce the cap.
+      const file = { id: "F1", name: "pic.png", mimetype: "image/png", url_private: "https://files.slack.test/F1" };
+      await messageHandler({ message: { type: "message", subtype: "file_share", user: "U123", channel: "D123", ts: "7.7", text: "", files: [file] } });
+      return received[0]!.attachments!();
+    }
+
+    function streamOf(chunks: number[], pulled: { count: number }) {
+      return new ReadableStream<Uint8Array>({
+        pull(controller) {
+          const size = chunks[pulled.count++];
+          if (size === undefined) controller.close();
+          else controller.enqueue(new Uint8Array(size));
+        },
+      });
+    }
+
+    it("stops downloading a file with no declared size once it passes maxFileSize", async () => {
+      const pulled = { count: 0 };
+      const attachments = await attachmentsFor(streamOf([6, 6, 6, 6, 6, 6], pulled));
+
+      expect(attachments).toEqual([]);
+      expect(pulled.count).toBeLessThan(6);
+    });
+
+    it("skips a file whose Content-Length is over maxFileSize", async () => {
+      const pulled = { count: 0 };
+      const attachments = await attachmentsFor(streamOf([6], pulled), { "content-length": "100" });
+
+      expect(attachments).toEqual([]);
+    });
+
+    it("keeps a file within maxFileSize", async () => {
+      const pulled = { count: 0 };
+      const attachments = await attachmentsFor(streamOf([4, 4], pulled));
+
+      expect(attachments).toMatchObject([{ name: "pic.png", mimeType: "image/png", encoding: "base64" }]);
+      expect(Buffer.from(attachments[0]!.body, "base64")).toHaveLength(8);
+    });
+  });
+
+  describe("start failure", () => {
+    it("stops the app when auth.test fails", async () => {
+      const client = (App as any).mock.results[0].value.client;
+      client.auth.test.mockRejectedValueOnce(new Error("invalid_auth"));
+
+      await expect(
+        slackService.reconfigure({ accounts: { ...config.accounts, other: { ...config.accounts.workspace!, botToken: "xoxb-bad" } } }),
+      ).rejects.toThrow("invalid_auth");
+
+      const failed = (App as any).mock.results.at(-1).value;
+      expect(failed.start).not.toHaveBeenCalled();
+      expect(failed.stop).toHaveBeenCalled();
+    });
+
+    it("stops the app when it fails to start, so no socket stays open", async () => {
+      const impl = (App as any).getMockImplementation();
+      (App as any).mockImplementationOnce((...args: unknown[]) => {
+        const instance = impl(...args);
+        instance.start = mock().mockRejectedValue(new Error("socket refused"));
+        return instance;
+      });
+
+      await expect(
+        slackService.reconfigure({ accounts: { ...config.accounts, other: { ...config.accounts.workspace!, botToken: "xoxb-bad" } } }),
+      ).rejects.toThrow("socket refused");
+
+      expect((App as any).mock.results.at(-1).value.stop).toHaveBeenCalled();
+      expect(slackService.getAvailableAccounts()).toEqual(["workspace"]);
     });
   });
 });
